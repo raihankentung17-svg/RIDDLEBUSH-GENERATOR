@@ -9,18 +9,19 @@ const Icons = {
 };
 
 // ======================================================================
-// KOMPONEN UI KUSTOM
+// KOMPONEN UI KUSTOM (Diperbarui ke Tema Mega Studio)
 // ======================================================================
 const Accordion = ({ title, children, defaultOpen = false }) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   return (
-    <div className="border-b border-gray-200/80">
+    <div className="border-b border-[#222]">
       <button 
         onClick={() => setIsOpen(!isOpen)} 
-        className="flex items-center justify-between w-full py-4 px-5 bg-transparent hover:bg-gray-50/50 transition-colors text-[11px] font-medium text-gray-500 uppercase tracking-[0.2em]"
+        className="flex items-center justify-between w-full py-4 px-5 bg-transparent hover:bg-[#111] transition-colors text-[11px] font-bold text-[#00FFFF] uppercase tracking-[0.2em]"
+        style={{ fontFamily: "'Space Mono', monospace" }}
       >
         <span>{title}</span>
-        {isOpen ? <Icons.Minus className="text-gray-400" /> : <Icons.Plus className="text-gray-400" />}
+        {isOpen ? <Icons.Minus className="text-[#00FFFF]" /> : <Icons.Plus className="text-[#00FFFF]" />}
       </button>
       {isOpen && <div className="px-5 pb-5 space-y-6 bg-transparent">{children}</div>}
     </div>
@@ -33,10 +34,10 @@ const Slider = ({ label, desc, value, min, max, step, onChange }) => {
     <div className="w-full">
       <div className="flex justify-between items-end mb-1">
         <div>
-          <div className="text-[10px] font-semibold text-gray-700 uppercase tracking-widest">{label}</div>
-          {desc && <div className="text-[9px] text-gray-400 font-light mt-0.5 leading-tight">{desc}</div>}
+          <div className="text-[10px] font-bold text-[#888] uppercase tracking-widest">{label}</div>
+          {desc && <div className="text-[9px] text-[#555] font-medium mt-0.5 leading-tight">{desc}</div>}
         </div>
-        <div className="text-[11px] text-gray-600 font-mono">{value}</div>
+        <div className="text-[11px] text-[#10B981] font-bold" style={{ fontFamily: "'Space Mono', monospace" }}>{value}</div>
       </div>
       <div className="relative mt-2 h-3 flex items-center group">
         <input
@@ -44,11 +45,11 @@ const Slider = ({ label, desc, value, min, max, step, onChange }) => {
           onChange={(e) => onChange(parseFloat(e.target.value))}
           className="w-full absolute z-10 opacity-0 cursor-pointer h-full"
         />
-        <div className="w-full h-[3px] bg-gray-200 rounded-full overflow-hidden absolute">
-           <div className="h-full bg-gray-400 transition-all duration-75" style={{ width: `${percentage}%` }}></div>
+        <div className="w-full h-[3px] bg-[#333] rounded-full overflow-hidden absolute">
+           <div className="h-full bg-[#00FFFF] transition-all duration-75 shadow-[0_0_5px_rgba(0,255,255,0.5)]" style={{ width: `${percentage}%` }}></div>
         </div>
         <div 
-          className="h-3 w-3 bg-gray-600 rounded-full absolute transition-colors shadow-sm pointer-events-none" 
+          className="h-3 w-3 bg-[#10B981] rounded-full absolute transition-colors shadow-[0_0_8px_rgba(16,185,129,0.8)] pointer-events-none" 
           style={{ left: `calc(${percentage}% - 6px)` }}
         ></div>
       </div>
@@ -59,22 +60,24 @@ const Slider = ({ label, desc, value, min, max, step, onChange }) => {
 const ToggleButton = ({ active, label, onClick }) => (
   <button
     onClick={onClick}
-    className={`w-full py-2.5 text-[12px] font-light transition-colors border ${
-      active ? 'bg-[#1a1a1a] text-white border-[#1a1a1a]' : 'bg-white text-gray-800 border-gray-300 hover:border-gray-400'
+    className={`w-full py-2.5 text-[12px] font-bold transition-all border ${
+      active ? 'bg-[#111] text-[#10B981] border-[#10B981] shadow-[0_0_10px_rgba(16,185,129,0.2)]' : 'bg-transparent text-[#888] border-[#333] hover:border-[#555] hover:text-[#ccc]'
     }`}
+    style={{ fontFamily: "'Space Mono', monospace" }}
   >
     {label}
   </button>
 );
 
 const ButtonGroup = ({ options, active, onChange }) => (
-  <div className="flex border border-gray-300 w-full bg-white">
+  <div className="flex border border-[#333] w-full bg-[#111] rounded overflow-hidden">
     {options.map((opt, i) => (
       <button
         key={opt} onClick={() => onChange(opt)}
-        className={`flex-1 text-[11px] py-2 font-medium tracking-wide transition-colors ${i !== 0 ? 'border-l border-gray-300' : ''} ${
-          active === opt ? 'bg-[#1a1a1a] text-white' : 'bg-transparent text-gray-600 hover:bg-gray-50'
+        className={`flex-1 text-[11px] py-2 font-bold tracking-wide transition-colors ${i !== 0 ? 'border-l border-[#333]' : ''} ${
+          active === opt ? 'bg-[#222] text-[#00FFFF] shadow-[inset_0_-2px_0_#00FFFF]' : 'bg-transparent text-[#888] hover:bg-[#222] hover:text-[#ccc]'
         }`}
+        style={{ fontFamily: "'Space Mono', monospace" }}
       >
         {opt}
       </button>
@@ -83,7 +86,7 @@ const ButtonGroup = ({ options, active, onChange }) => (
 );
 
 // ======================================================================
-// KONFIGURASI GLOBAL & RESOLUSI
+// KONFIGURASI GLOBAL & RESOLUSI (TIDAK DISENTUH LOGIKANYA)
 // ======================================================================
 const RESOLUTIONS = {
   'Square 1:1 (1080x1080)': { w: 1080, h: 1080 },
@@ -404,7 +407,7 @@ export default function App() {
     // 5. Typography Custom Stamps
     customStamps.forEach(stamp => {
         ctx.fillStyle = config.lineColor;
-        ctx.font = `600 ${stamp.size}px "Inter", sans-serif`;
+        ctx.font = `600 ${stamp.size}px "Space Mono", monospace`;
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         if (stamp.id === draggingStampId) { ctx.shadowColor = config.lineColor; ctx.shadowBlur = 15; }
         ctx.fillText(stamp.text, stamp.x, stamp.y);
@@ -504,7 +507,7 @@ export default function App() {
 
     // 8. Teks Sudut
     ctx.fillStyle = config.lineColor.replace(/[^,]+(?=\))/, '0.9'); 
-    ctx.font = `300 ${config.frameTextSize}px "Inter", sans-serif`;
+    ctx.font = `300 ${config.frameTextSize}px "Space Mono", monospace`;
     const textPad = config.frameOn ? config.frameSize - 20 : 30;
     ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText(config.textTL, textPad, textPad);
     ctx.textAlign = 'right'; ctx.fillText(config.textTR, w - textPad, textPad);
@@ -627,7 +630,7 @@ export default function App() {
 
       svg += `<g fill="${config.lineColor.replace(/[^,]+(?=\))/, '0.9')}" text-anchor="middle" dominant-baseline="middle">`;
       customStamps.forEach(stamp => {
-          svg += `<text x="${stamp.x}" y="${stamp.y}" font-family="Inter, sans-serif" font-weight="600" font-size="${stamp.size}">${stamp.text}</text>`;
+          svg += `<text x="${stamp.x}" y="${stamp.y}" font-family="Space Mono, monospace" font-weight="600" font-size="${stamp.size}">${stamp.text}</text>`;
       });
       svg += `</g></svg>`;
 
@@ -637,22 +640,22 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col md:flex-row h-screen w-full font-sans overflow-hidden bg-[#e5e5e5] text-gray-800 selection:bg-[#1a1a1a] selection:text-white">
+    <div className="flex flex-col md:flex-row h-screen w-full overflow-hidden bg-[#050505] text-[#e5e5e5] selection:bg-[#00FFFF] selection:text-black">
       
       {/* SIDEBAR */}
-      <div className="w-full md:w-[360px] bg-[#fcfcfc] border-r border-gray-200 flex flex-col h-[60vh] md:h-full order-2 md:order-1 shadow-xl z-20 shrink-0">
+      <div className="w-full md:w-[360px] bg-[#0a0a0a] border-r border-[#222] flex flex-col h-[60vh] md:h-full order-2 md:order-1 shadow-2xl z-20 shrink-0">
         
         {/* HEADER (REBRANDING) */}
-        <div className="p-6 border-b border-gray-200 flex-none bg-[#fcfcfc] z-10">
-          <h1 className="text-[17px] font-bold text-gray-900 tracking-wide">Riddlebush Archive</h1>
-          <p className="text-[11px] text-gray-400 font-light mt-0.5 tracking-wide">Brand Asset Generator</p>
+        <div className="p-6 border-b border-[#222] flex-none bg-[#111] z-10">
+          <h1 className="text-[17px] font-bold text-[#10B981] tracking-wide" style={{ fontFamily: "'Space Mono', monospace" }}>Riddlebush Archive</h1>
+          <p className="text-[11px] text-[#888] font-medium mt-0.5 tracking-wide">Data Generator Engine</p>
           
           <div className="mt-5 space-y-2">
-            <button onClick={() => randomizeAll()} className="w-full bg-[#1a1a1a] hover:bg-black text-white py-3.5 text-[13px] font-light transition-colors shadow-sm">
+            <button onClick={() => randomizeAll()} className="w-full bg-transparent border border-[#10B981] hover:bg-[#10B981] hover:text-black text-[#10B981] py-3.5 text-[13px] font-bold transition-all shadow-[0_0_10px_rgba(16,185,129,0.2)]" style={{ fontFamily: "'Space Mono', monospace" }}>
               Randomize All
             </button>
           </div>
-          <p className="text-[9.5px] text-gray-400 mt-3 font-light leading-relaxed">
+          <p className="text-[9.5px] text-[#555] mt-3 font-medium leading-relaxed">
             Shuffles every parameter except chain settings.
           </p>
         </div>
@@ -662,7 +665,7 @@ export default function App() {
           
           <Accordion title="IMAGE">
              <input type="file" accept="image/*" id="imgUpload" className="hidden" onChange={handleImageUpload} />
-             <label htmlFor="imgUpload" className="block w-full border border-gray-300 text-gray-600 hover:border-gray-400 text-center py-2.5 cursor-pointer transition-colors text-[12px] font-light bg-white mb-4">
+             <label htmlFor="imgUpload" className="block w-full border border-[#00FFFF] text-[#00FFFF] hover:bg-[#222] hover:shadow-[0_0_10px_rgba(0,255,255,0.2)] text-center py-2.5 cursor-pointer transition-all text-[12px] font-bold bg-[#111] mb-4" style={{ fontFamily: "'Space Mono', monospace" }}>
                 Upload Image
              </label>
              <Slider label="IMAGE OPACITY" desc="Fade the background image" min={0} max={1} step={0.05} value={config.imageOpacity} onChange={v => setConfig({...config, imageOpacity: v})} />
@@ -670,7 +673,7 @@ export default function App() {
 
           <Accordion title="INTERACTIVE TOOLS" defaultOpen={true}>
              <div className="mb-4">
-                 <p className="text-[10px] text-gray-700 font-semibold tracking-widest mb-2 uppercase">Select Active Tool</p>
+                 <p className="text-[10px] text-[#888] font-bold tracking-widest mb-2 uppercase">Select Active Tool</p>
                  <ButtonGroup options={['Pixelate', 'Gravity', 'Move Text']} active={activeTool} onChange={setActiveTool} />
              </div>
              {activeTool === 'Pixelate' && (
@@ -678,8 +681,8 @@ export default function App() {
                      <Slider label="PIXEL SIZE" min={2} max={100} step={2} value={config.pixelSize} onChange={v => setConfig({...config, pixelSize: v})} />
                      <Slider label="ZONE SIZE" min={20} max={400} step={10} value={config.zoneSize} onChange={v => setConfig({...config, zoneSize: v})} />
                      <div className="flex gap-2">
-                         <button onClick={() => setPixelZones(prev => prev.slice(0, -1))} className="flex-1 border border-gray-300 bg-white py-2.5 text-[12px] hover:bg-gray-50">Undo</button>
-                         <button onClick={() => setPixelZones([])} className="flex-1 border border-gray-300 bg-white py-2.5 text-[12px] hover:bg-gray-50">Clear</button>
+                         <button onClick={() => setPixelZones(prev => prev.slice(0, -1))} className="flex-1 border border-[#333] bg-[#111] text-[#ccc] py-2.5 text-[12px] hover:bg-[#222] font-bold" style={{ fontFamily: "'Space Mono', monospace" }}>Undo</button>
+                         <button onClick={() => setPixelZones([])} className="flex-1 border border-[#333] bg-[#111] text-[#ccc] py-2.5 text-[12px] hover:bg-[#222] font-bold" style={{ fontFamily: "'Space Mono', monospace" }}>Clear</button>
                      </div>
                  </div>
              )}
@@ -688,23 +691,23 @@ export default function App() {
                      <Slider label="GRAVITY RADIUS" min={50} max={500} step={10} value={config.gravityRadius} onChange={v => setConfig({...config, gravityRadius: v})} />
                      <Slider label="FORCE STRENGTH" min={-2} max={2} step={0.1} value={config.gravityStrength} onChange={v => setConfig({...config, gravityStrength: v})} />
                      <div className="flex gap-2">
-                         <button onClick={() => setGravityZones(prev => prev.slice(0, -1))} className="flex-1 border border-gray-300 bg-white py-2.5 text-[12px] hover:bg-gray-50">Undo</button>
-                         <button onClick={() => setGravityZones([])} className="flex-1 border border-gray-300 bg-white py-2.5 text-[12px] hover:bg-gray-50">Clear</button>
+                         <button onClick={() => setGravityZones(prev => prev.slice(0, -1))} className="flex-1 border border-[#333] bg-[#111] text-[#ccc] py-2.5 text-[12px] hover:bg-[#222] font-bold" style={{ fontFamily: "'Space Mono', monospace" }}>Undo</button>
+                         <button onClick={() => setGravityZones([])} className="flex-1 border border-[#333] bg-[#111] text-[#ccc] py-2.5 text-[12px] hover:bg-[#222] font-bold" style={{ fontFamily: "'Space Mono', monospace" }}>Clear</button>
                      </div>
                  </div>
              )}
           </Accordion>
 
           <Accordion title="CUSTOM STAMPS">
-             <input type="text" value={stampInput} onChange={e=>setStampInput(e.target.value)} className="w-full border border-gray-300 p-2.5 text-xs outline-none bg-white font-medium focus:border-gray-500 mb-2" placeholder="Enter text..." />
-             <button onClick={addStamp} className="w-full bg-[#1a1a1a] hover:bg-black text-white py-2.5 text-[12px] mb-4">Add Stamp to Canvas</button>
+             <input type="text" value={stampInput} onChange={e=>setStampInput(e.target.value)} className="w-full border border-[#333] p-2.5 text-xs outline-none bg-[#111] text-white font-medium focus:border-[#00FFFF] mb-2" placeholder="Enter text..." />
+             <button onClick={addStamp} className="w-full bg-[#0891B2] hover:bg-[#06B6D4] text-black font-bold py-2.5 text-[12px] mb-4 transition-colors" style={{ fontFamily: "'Space Mono', monospace" }}>Add Stamp to Canvas</button>
              {customStamps.length > 0 && (
                  <div className="space-y-2">
-                     <p className="text-[10px] text-gray-700 font-semibold tracking-widest uppercase">Active Stamps</p>
+                     <p className="text-[10px] text-[#888] font-bold tracking-widest uppercase">Active Stamps</p>
                      {customStamps.map(s => (
-                         <div key={s.id} className="flex justify-between items-center bg-white border border-gray-200 p-2 text-xs">
-                             <span className="truncate max-w-[200px]">{s.text}</span>
-                             <button onClick={() => setCustomStamps(prev => prev.filter(x => x.id !== s.id))} className="text-red-500 hover:text-red-700 font-bold">X</button>
+                         <div key={s.id} className="flex justify-between items-center bg-[#111] border border-[#333] p-2 text-xs">
+                             <span className="truncate max-w-[200px] text-white" style={{ fontFamily: "'Space Mono', monospace" }}>{s.text}</span>
+                             <button onClick={() => setCustomStamps(prev => prev.filter(x => x.id !== s.id))} className="text-red-500 hover:text-red-400 font-bold">X</button>
                          </div>
                      ))}
                  </div>
@@ -713,10 +716,10 @@ export default function App() {
 
           <Accordion title="FRAME TEXT">
              <div className="space-y-2">
-                <input type="text" value={config.textTL} onChange={e=>setConfig({...config, textTL:e.target.value})} className="w-full border border-gray-300 p-2.5 text-xs outline-none bg-white font-light focus:border-gray-500"/>
-                <input type="text" value={config.textTR} onChange={e=>setConfig({...config, textTR:e.target.value})} className="w-full border border-gray-300 p-2.5 text-xs outline-none bg-white font-light focus:border-gray-500"/>
-                <input type="text" value={config.textBL} onChange={e=>setConfig({...config, textBL:e.target.value})} className="w-full border border-gray-300 p-2.5 text-xs outline-none bg-white font-light focus:border-gray-500"/>
-                <input type="text" value={config.textBR} onChange={e=>setConfig({...config, textBR:e.target.value})} className="w-full border border-gray-300 p-2.5 text-xs outline-none bg-white font-light focus:border-gray-500"/>
+                <input type="text" value={config.textTL} onChange={e=>setConfig({...config, textTL:e.target.value})} className="w-full border border-[#333] p-2.5 text-xs outline-none bg-[#111] text-white focus:border-[#00FFFF]"/>
+                <input type="text" value={config.textTR} onChange={e=>setConfig({...config, textTR:e.target.value})} className="w-full border border-[#333] p-2.5 text-xs outline-none bg-[#111] text-white focus:border-[#00FFFF]"/>
+                <input type="text" value={config.textBL} onChange={e=>setConfig({...config, textBL:e.target.value})} className="w-full border border-[#333] p-2.5 text-xs outline-none bg-[#111] text-white focus:border-[#00FFFF]"/>
+                <input type="text" value={config.textBR} onChange={e=>setConfig({...config, textBR:e.target.value})} className="w-full border border-[#333] p-2.5 text-xs outline-none bg-[#111] text-white focus:border-[#00FFFF]"/>
              </div>
              <div className="pt-2"><Slider label="TEXT SIZE" min={8} max={48} step={1} value={config.frameTextSize} onChange={v => setConfig({...config, frameTextSize: v})} /></div>
           </Accordion>
@@ -724,7 +727,7 @@ export default function App() {
           <Accordion title="CROSSHAIR FRAME" defaultOpen={true}>
              <ToggleButton active={config.frameOn} label={config.frameOn ? "Frame On" : "Frame Off"} onClick={() => setConfig({...config, frameOn: !config.frameOn})} />
              <div className="pt-2">
-                 <div className="text-[10px] text-gray-700 font-semibold tracking-widest mb-2 uppercase">Style</div>
+                 <div className="text-[10px] text-[#888] font-bold tracking-widest mb-2 uppercase">Style</div>
                  <ButtonGroup options={['Classic', 'Blueprint']} active={config.frameStyle} onChange={v => setConfig({...config, frameStyle: v})} />
              </div>
              <Slider label="FRAME SIZE" min={0} max={500} step={2} value={config.frameSize} onChange={v => setConfig({...config, frameSize: v})} />
@@ -746,22 +749,26 @@ export default function App() {
             <div className="flex gap-2">
                 <button
                     onClick={() => setConfig({...config, detectMode: 'Combined'})}
-                    className={`flex-1 text-[11px] py-2 font-medium tracking-wide transition-colors border border-gray-300 ${config.detectMode === 'Combined' ? 'bg-[#1a1a1a] text-white' : 'bg-transparent text-gray-600 hover:bg-gray-50'}`}
+                    className={`flex-1 text-[11px] py-2 font-bold tracking-wide transition-colors border border-[#333] ${config.detectMode === 'Combined' ? 'bg-[#222] text-[#00FFFF] shadow-[inset_0_-2px_0_#00FFFF]' : 'bg-transparent text-[#888] hover:bg-[#222]'}`}
+                    style={{ fontFamily: "'Space Mono', monospace" }}
                 >Combined</button>
                 <button
                     onClick={() => setConfig({...config, detectMode: 'Contrast'})}
-                    className={`flex-1 text-[11px] py-2 font-medium tracking-wide transition-colors border border-gray-300 ${config.detectMode === 'Contrast' ? 'bg-[#1a1a1a] text-white' : 'bg-transparent text-gray-600 hover:bg-gray-50'}`}
+                    className={`flex-1 text-[11px] py-2 font-bold tracking-wide transition-colors border border-[#333] ${config.detectMode === 'Contrast' ? 'bg-[#222] text-[#00FFFF] shadow-[inset_0_-2px_0_#00FFFF]' : 'bg-transparent text-[#888] hover:bg-[#222]'}`}
+                    style={{ fontFamily: "'Space Mono', monospace" }}
                 >Contrast</button>
             </div>
             
             <div className="flex gap-2 mt-2">
                 <button
                     onClick={() => setConfig({...config, detectMode: 'Bright'})}
-                    className={`flex-1 text-[11px] py-2 font-medium tracking-wide transition-colors border border-gray-300 ${config.detectMode === 'Bright' ? 'bg-[#1a1a1a] text-white' : 'bg-transparent text-gray-600 hover:bg-gray-50'}`}
+                    className={`flex-1 text-[11px] py-2 font-bold tracking-wide transition-colors border border-[#333] ${config.detectMode === 'Bright' ? 'bg-[#222] text-[#00FFFF] shadow-[inset_0_-2px_0_#00FFFF]' : 'bg-transparent text-[#888] hover:bg-[#222]'}`}
+                    style={{ fontFamily: "'Space Mono', monospace" }}
                 >Bright</button>
                 <button
                     onClick={() => setConfig({...config, detectMode: 'Dark'})}
-                    className={`flex-1 text-[11px] py-2 font-medium tracking-wide transition-colors border border-gray-300 ${config.detectMode === 'Dark' ? 'bg-[#1a1a1a] text-white' : 'bg-transparent text-gray-600 hover:bg-gray-50'}`}
+                    className={`flex-1 text-[11px] py-2 font-bold tracking-wide transition-colors border border-[#333] ${config.detectMode === 'Dark' ? 'bg-[#222] text-[#00FFFF] shadow-[inset_0_-2px_0_#00FFFF]' : 'bg-transparent text-[#888] hover:bg-[#222]'}`}
+                    style={{ fontFamily: "'Space Mono', monospace" }}
                 >Dark</button>
             </div>
             
@@ -792,20 +799,20 @@ export default function App() {
           <Accordion title="PALETTE">
              <div className="space-y-4">
                  <div>
-                     <p className="text-[10px] text-gray-700 font-semibold tracking-widest mb-2 uppercase">Line Color</p>
+                     <p className="text-[10px] text-[#888] font-bold tracking-widest mb-2 uppercase">Line Color</p>
                      <ButtonGroup 
                         options={['White', 'Black', 'Green']} 
                         active={config.lineColor.includes('255, 255, 255') ? 'White' : (config.lineColor.includes('0, 0, 0') ? 'Black' : 'Green')} 
                         onChange={v => {
                             if(v==='White') setConfig({...config, lineColor: 'rgba(255, 255, 255, 0.85)'});
                             if(v==='Black') setConfig({...config, lineColor: 'rgba(0, 0, 0, 0.85)'});
-                            if(v==='Green') setConfig({...config, lineColor: 'rgba(57, 255, 20, 0.85)'});
+                            if(v==='Green') setConfig({...config, lineColor: 'rgba(16, 185, 129, 0.85)'}); // Emerald Green
                         }} 
                      />
                  </div>
                  <div>
-                     <p className="text-[10px] text-gray-700 font-semibold tracking-widest mb-2 uppercase">Background Color</p>
-                     <input type="color" value={config.bgColor} onChange={e => setConfig({...config, bgColor: e.target.value})} className="w-full h-10 border-none cursor-pointer" />
+                     <p className="text-[10px] text-[#888] font-bold tracking-widest mb-2 uppercase">Background Color</p>
+                     <input type="color" value={config.bgColor} onChange={e => setConfig({...config, bgColor: e.target.value})} className="w-full h-10 border-none cursor-pointer bg-transparent" />
                  </div>
              </div>
           </Accordion>
@@ -813,14 +820,15 @@ export default function App() {
           <Accordion title="EXPORT" defaultOpen={true}>
              <select 
                 value={config.resolution} onChange={(e) => setConfig({...config, resolution: e.target.value})}
-                className="w-full bg-white border border-gray-300 text-gray-700 text-[12px] font-light p-3 outline-none cursor-pointer focus:border-gray-500 mb-4"
+                className="w-full bg-[#111] border border-[#333] text-white text-[12px] font-bold p-3 outline-none cursor-pointer focus:border-[#00FFFF] mb-4"
+                style={{ fontFamily: "'Space Mono', monospace" }}
              >
                 {Object.keys(RESOLUTIONS).map(res => <option key={res} value={res}>{res}</option>)}
              </select>
              <div className="flex gap-2">
-                 <button onClick={exportPNG} className="flex-1 bg-[#1a1a1a] hover:bg-black text-white py-4 font-normal text-[14px] transition-colors shadow-sm">PNG</button>
-                 <button onClick={exportSVG} className="flex-1 bg-[#1a1a1a] hover:bg-black text-white py-4 font-normal text-[14px] transition-colors shadow-sm flex items-center justify-center gap-2">
-                    <span className="text-[10px] bg-yellow-400 text-black px-1.5 py-0.5 rounded font-bold">PRO</span> SVG
+                 <button onClick={exportPNG} className="flex-1 bg-[#10B981] hover:bg-[#059669] text-black py-4 font-bold text-[14px] transition-colors shadow-[0_0_10px_rgba(16,185,129,0.2)]" style={{ fontFamily: "'Space Mono', monospace" }}>PNG</button>
+                 <button onClick={exportSVG} className="flex-1 bg-[#00FFFF] hover:bg-[#0891B2] text-black py-4 font-bold text-[14px] transition-colors shadow-[0_0_10px_rgba(0,255,255,0.2)] flex items-center justify-center gap-2" style={{ fontFamily: "'Space Mono', monospace" }}>
+                    <span className="text-[10px] bg-[#000] text-[#00FFFF] border border-[#00FFFF] px-1.5 py-0.5 rounded font-bold">PRO</span> SVG
                  </button>
              </div>
           </Accordion>
@@ -829,16 +837,22 @@ export default function App() {
       </div>
 
       {/* KANVAS KERJA */}
-      <div className="flex-1 bg-[#1a1a1a] relative flex items-center justify-center p-6 md:p-12 order-1 md:order-2 h-[40vh] md:h-full shadow-inner overflow-hidden">
-        <div className="relative shadow-2xl flex justify-center items-center group h-full max-w-full border border-white/10" style={{ cursor: activeTool === 'Move Text' ? 'grab' : 'crosshair' }}>
+      <div className="flex-1 bg-[#050505] relative flex items-center justify-center p-6 md:p-12 order-1 md:order-2 h-[40vh] md:h-full shadow-inner overflow-hidden">
+        <div className="relative shadow-[0_0_50px_rgba(0,0,0,0.8)] flex justify-center items-center group h-full max-w-full border border-[#222]" style={{ cursor: activeTool === 'Move Text' ? 'grab' : 'crosshair' }}>
            <canvas
              ref={canvasRef} width={activeRes.w} height={activeRes.h}
              onMouseDown={handleCanvasAction} onMouseMove={handleCanvasAction} onMouseUp={handleCanvasAction} onMouseLeave={handleCanvasAction}
-             className="bg-black max-w-full max-h-full object-contain" style={{ aspectRatio: `${activeRes.w} / ${activeRes.h}` }}
+             className="bg-[#050505] max-w-full max-h-full object-contain" style={{ aspectRatio: `${activeRes.w} / ${activeRes.h}` }}
            />
         </div>
       </div>
 
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #555; }
+      `}</style>
     </div>
   );
 }
