@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+      <link rel="manifest" href="/manifest.json" />
+      <meta name="theme-color" content="#1a1a1a" />
+      <link rel="apple-touch-icon" href="/logo.png" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').then(registration => {
+            console.log('ServiceWorker terdaftar sukses dengan scope: ', registration.scope);
+          }).catch(err => {
+            console.log('ServiceWorker gagal mendaftar: ', err);
+          });
+        });
+      }
+    </script>
+  </body>
+</html>

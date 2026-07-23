@@ -1,0 +1,21 @@
+/* STREAMING_CHUNK: Import Tailwind V4 dan Reset CSS */
+@import "tailwindcss";
+
+body, html {
+margin: 0;
+padding: 0;
+width: 100%;
+height: 100%;
+background-color: #050505;
+font-family: 'Inter', system-ui, -apple-system, sans-serif;
+overflow: hidden;
+}
+
+/* Custom Scrollbar Brutalist */
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+/* Hapus panah pada menu dropdown */
+select { -webkit-appearance: none; -moz-appearance: none; appearance: none; }
