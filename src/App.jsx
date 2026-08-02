@@ -124,6 +124,99 @@ export default function App() {
   const [draggingStampId, setDraggingStampId] = useState(null);
   
   // ======================================================================
+  // MASTER MEMORY & IMAGE DATA CACHE
+  // ======================================================================
+  const imgDataRef = useRef(null);
+
+  const [config, setConfig] = useState({
+    imageOpacity: 0.85,
+    pixelSize: 16, zoneSize: 100, strokeOn: true,
+    gravityRadius: 200, gravityStrength: 0.8,
+    
+    // REBRANDING TEXT
+    textTL: 'Riddlebush Archive', textTR: 'Generative Engine', 
+    textBL: 'https://riddlebushapp.vercel.app/', textBR: 'Jakarta, Indonesia', frameTextSize: 12,
+    
+    // Crosshair Frame
+    frameOn: true, frameStyle: 'Blueprint', frameSize: 100, dashPattern: 20, frameStroke: 2, starSize: 80, starPoints: 8,
+    
+    chainOn: true, chainCount: 11, chainAngle: 45, chainBaseRadius: 250, chainSizeRatio: 0.79, intersectionsOn: true, markerSize: 50,
+    
+    // 4 Mode Detection Terpisah
+    detectMode: 'Contrast', // Pilihan: 'Combined', 'Contrast', 'Bright', 'Dark'
+    blockSize: 20, threshold: 25, maxCircles: 150,
+    
+    // Shapes & Connections
+    shapeType: 'Square', minRadius: 4, maxRadius: 24, shapeStroke: 1, 
+    seed: 525, labelSize: 10, overlayOpacity: 100, maxDistanceLine: 40, lineWeight: 0.8,
+    lineColor: 'rgba(255, 255, 255, 0.85)', bgColor: '#050505',
+    resolution: 'Portrait 4:5 (1080x1350)', textureOpacity: 0.50
+  });
+
+  const activeRes = RESOLUTIONS[config.resolution];
+
+  useEffect(() => { loadBaseImage(PRESET_IMAGES[0].url); }, []);
+
+  const loadBaseImage = (url) => {
+    const img = new Image(); img.crossOrigin = 'anonymous';
+    img.onload = () => { 
+        setBaseImage(img); setPixelZones([]); 
+        extractImageData(img);
+    }; 
+    img.src = url;
+  };
+
+  const handleImageUpload = (e, isTexture = false) => {
+    const file = e.target.files[0];
+    if (file) {
+      const url = URL.createObjectURL(file);
+      const img = new Image(); img.onload = () => { 
+        if (isTexture) setTextureImage(img); 
+        else { setBaseImage(img); setPixelZones([]); extractImageData(img); }
+      }; img.src = url;
+    }
+  };
+
+  // ======================================================================
+  // FUNGSI EKSTRAKSI DATA GAMBAR (Hanya jalan saat gambar berubah)
+  // ======================================================================
+  const extractImageData = useCallback((img = baseImage) => {
+      if(!img) return;
+      const { w, h } = activeRes;
+      const offCanvas = document.createElement('canvas');
+      offCanvas.width = w; offCanvas.height = h;
+      const ctx = offCanvas.getContext('2d', { willReadFrequently: true });
+      
+      const imgRatio = img.width / img.height; const canvasRatio = w / h;
+      let sWidth = img.width, sHeight = img.height, sx = 0, sy = 0;
+      if (imgRatio > canvasRatio) { sWidth = img.height * canvasRatio; sx = (img.width - sWidth) / 2; } 
+      else { sHeight = img.width / canvasRatio; sy = (img.height - sHeight) / 2; }
+      ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, w, h);
+      
+      try { imgDataRef.current = ctx.getImageData(0, 0, w, h).data; } catch (e) {}
+  }, [activeRes, baseImage]);
+
+  useEffect(() => { extractImageData(); }, [extractImageData]);
+
+  useEffect(() => {
+    if (!baseImage) return;
+    const offCanvas = document.createElement('canvas');
+    offCanvas.width = activeRes.w; offCanvas.height = activeRes.h;
+    const ctx = offCanvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    const scale = Math.max(0.01, (100 - config.pixelSize) / 100); 
+    const sw = Math.max(1, activeRes.w * scale); const sh = Math.max(1, activeRes.h * scale);
+    const imgRatio = baseImage.width / baseImage.height; const canvasRatio = activeRes.w / activeRes.h;
+    let sWidth = baseImage.width, sHeight = baseImage.height, sx = 0, sy = 0;
+    if (imgRatio > canvasRatio) { sWidth = baseImage.height * canvasRatio; sx = (baseImage.width - sWidth) / 2; } 
+    else { sHeight = baseImage.width / canvasRatio; sy = (baseImage.height - sHeight) / 2; }
+    ctx.drawImage(baseImage, sx, sy, sWidth, sHeight, 0, 0, sw, sh);
+    ctx.drawImage(offCanvas, 0, 0, sw, sh, 0, 0, activeRes.w, activeRes.h);
+    setOffscreenPixelCanvas(offCanvas);
+  }, [baseImage, activeRes, config.pixelSize]);
+
+
+  // ======================================================================
   // OTAK UTAMA: STRICT GRID MATRIX SCANNER (AKURASI DETEKSI)
   // Menjamin pola rapi dan geometris (Tidak ada benang kusut)
   // ======================================================================
@@ -134,61 +227,59 @@ export default function App() {
       const imgData = imgDataRef.current;
       const bs = config.blockSize;
 
-      // DETERMINISTIC RANDOM: Mengunci angka acak pada koordinat pixel agar tidak berubah liar saat slider digeser
-      const getStableRandom = (x, y, seedOffset) => {
-          const val = Math.sin(x * 12.9898 + y * 78.233 + config.seed + seedOffset) * 43758.5453;
-          return val - Math.floor(val);
-      };
+      // Pseudo-random dinamis berdasar Seed untuk mengatur jitter dan label
+      let currentSeed = config.seed;
+      const random = () => { const x = Math.sin(currentSeed++) * 10000; return x - Math.floor(x); };
 
-      const getLuma = (px, py) => {
-          if (px < 0 || px >= w || py < 0 || py >= h) return 0;
-          const idx = (Math.floor(py) * w + Math.floor(px)) * 4;
-          return (imgData[idx] * 0.299 + imgData[idx+1] * 0.587 + imgData[idx+2] * 0.114);
-      };
+      // LOOPING STRICT GRID: Hanya mengecek piksel pada persimpangan garis kotak
+      for (let y = bs; y < h - bs; y += bs) {
+          for (let x = bs; x < w - bs; x += bs) {
+              const pxIdx = (y * w + x) * 4;
+              const lumaCenter = (imgData[pxIdx] * 0.299 + imgData[pxIdx+1] * 0.587 + imgData[pxIdx+2] * 0.114);
 
-      // EXACT GRID SCANNER: Memastikan seluruh area wajah dipindai tanpa ada yang terlewat
-      for (let y = bs/2; y < h; y += bs) {
-          for (let x = bs/2; x < w; x += bs) {
-              const lumaCenter = getLuma(x, y);
               let score = 0;
 
+              // 4 MODE DETEKSI TERPISAH MURNI (Sesuai Video Referensi)
               if (config.detectMode === 'Contrast') {
-                  // LOCAL CONTRAST: Hanya mengecek piksel radius 2px untuk sensitivitas pinggiran yang tajam
-                  let minL = lumaCenter, maxL = lumaCenter;
-                  const offset = 2; 
-                  const neighbors = [ getLuma(x - offset, y), getLuma(x + offset, y), getLuma(x, y - offset), getLuma(x, y + offset) ];
-                  for(let l of neighbors) { if (l > maxL) maxL = l; if (l < minL) minL = l; }
-                  // Boost sensitivitas x3
-                  score = Math.min(100, (Math.abs(maxL - minL) / 255) * 100 * 3);
+                  let maxLuma = lumaCenter; let minLuma = lumaCenter;
+                  const offsets = [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]];
+                  for (let [dx, dy] of offsets) {
+                      const nx = x + (dx * bs); const ny = y + (dy * bs);
+                      const nIdx = (ny * w + nx) * 4;
+                      if (nIdx >= 0 && nIdx < imgData.length) {
+                          const luma = (imgData[nIdx] * 0.299 + imgData[nIdx+1] * 0.587 + imgData[nIdx+2] * 0.114);
+                          if (luma > maxLuma) maxLuma = luma; if (luma < minLuma) minLuma = luma;
+                      }
+                  }
+                  score = (Math.abs(maxLuma - minLuma) / 255) * 100;
+                  
               } else if (config.detectMode === 'Combined') {
+                  // Mencari Titik Paling Terang DAN Paling Gelap
                   const scoreBright = (lumaCenter / 255) * 100;
                   const scoreDark = ((255 - lumaCenter) / 255) * 100;
                   score = Math.max(scoreBright, scoreDark);
+                  
               } else if (config.detectMode === 'Bright') {
-                  score = Math.pow(lumaCenter / 255, 0.8) * 100; // Logarithmic curve untuk sensitivitas
+                  score = (lumaCenter / 255) * 100;
+                  
               } else if (config.detectMode === 'Dark') {
-                  score = Math.pow((255 - lumaCenter) / 255, 0.8) * 100;
+                  score = ((255 - lumaCenter) / 255) * 100;
               }
               
               if (score >= config.threshold) {
-                  // STABLE JITTER: Digeser sedikit dari kotak agar organik, tapi dikunci ke seed (tidak menari/flicker)
-                  const jitterX = (getStableRandom(x, y, 1) - 0.5) * (bs * 1.3);
-                  const jitterY = (getStableRandom(x, y, 2) - 0.5) * (bs * 1.3);
+                  // DISTORSI ORGANIK (JITTER): Geser sedikit dari titik pusat grid agar natural
+                  const jitterX = (random() - 0.5) * (bs * 0.6);
+                  const jitterY = (random() - 0.5) * (bs * 0.6);
+                  const finalX = x + jitterX; const finalY = y + jitterY;
                   
-                  candidates.push({ 
-                      x: x + jitterX, y: y + jitterY, score, 
-                      sizeBias: getStableRandom(x, y, 3), 
-                      labelVal1: getStableRandom(x, y, 4), labelVal2: getStableRandom(x, y, 5) 
-                  });
+                  candidates.push({ x: finalX, y: finalY, score, sizeBias: random(), labelVal1: random(), labelVal2: random() });
               }
           }
       }
 
       // Mengurutkan dan mengambil titik dengan skor tertinggi (Top-Tier Sorting)
       candidates.sort((a, b) => b.score - a.score);
-      // BYPASS BOTTLENECK UI: UI slider max 500 membuang 90% detail pixel. Kita kalikan 15 di internal engine!
-      const internalMaxCircles = config.maxCircles * 15; 
-      const topCandidates = candidates.slice(0, internalMaxCircles);
+      const topCandidates = candidates.slice(0, config.maxCircles);
 
       return topCandidates.map(node => {
           const radius = config.minRadius + (node.sizeBias * (config.maxRadius - config.minRadius));
@@ -257,35 +348,35 @@ export default function App() {
     }
 
     // ==================================================================
-    // ALGORITMA NEURAL WEB (K-NEAREST NEIGHBORS TINGKAT LANJUT)
+    // ALGORITMA PENYORTIRAN JARAK SPASIAL (K-NEAREST NEIGHBORS)
     // ==================================================================
     ctx.globalAlpha = config.overlayOpacity / 100;
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = config.lineColor; ctx.fillStyle = config.lineColor;
+    ctx.lineWidth = config.lineWeight;
     
     for (let i = 0; i < renderNodes.length; i++) {
         const n1 = renderNodes[i];
+        
         let neighbors = [];
         for (let j = i + 1; j < renderNodes.length; j++) {
             const n2 = renderNodes[j];
             const dist = Math.hypot(n1.x - n2.x, n1.y - n2.y);
-            if (dist <= config.maxDistanceLine) neighbors.push({ node: n2, dist: dist });
+            if (dist <= config.maxDistanceLine) {
+                neighbors.push({ node: n2, dist: dist });
+            }
         }
         
+        // MENGURUTKAN BERDASARKAN JARAK TERDEKAT. Garis hanya menyambung ke tetangga terdekat.
         neighbors.sort((a, b) => a.dist - b.dist);
         
-        // KONEKSI ESTETIK: Max 3 sambungan agar elegan, garis konstan tipis, opacity pudar natural
-        const limit = Math.min(3, neighbors.length);
+        // Membatasi maksimal 5 sambungan per titik agar rapi membentuk poligon
+        const limit = Math.min(5, neighbors.length);
         for(let k = 0; k < limit; k++) {
-            const neighbor = neighbors[k];
             ctx.beginPath(); 
             ctx.moveTo(n1.x, n1.y); 
-            ctx.lineTo(neighbor.node.x, neighbor.node.y);
-            
-            const distRatio = neighbor.dist / config.maxDistanceLine;
-            const alpha = Math.max(0.02, Math.pow(1 - distRatio, 2) * 0.7); 
-            
-            ctx.lineWidth = Math.max(0.1, config.lineWeight * 0.3); 
-            ctx.strokeStyle = config.lineColor.replace(/[^,]+(?=\))/, alpha.toFixed(3)); 
+            ctx.lineTo(neighbors[k].node.x, neighbors[k].node.y);
+            // SOLID LINE: Garis tegas tanpa gradasi pudar
+            ctx.strokeStyle = config.lineColor.replace(/[^,]+(?=\))/, '0.85'); 
             ctx.stroke();
         }
     }
@@ -470,28 +561,26 @@ export default function App() {
   // SMART RANDOMIZER: RUMUS KUNCI ANTI-KUSUT SPAGHETTI
   // ======================================================================
   const randomizeAll = () => {
-    // AESTHETIC SWEET SPOT: Mengunci rentang acak pada rasio emas agar selalu elegan
-    const randomBlockSize = Math.floor(Math.random() * 12) + 8; // 8 - 20 (Sangat detail/halus)
-    const maxLineDist = Math.floor(Math.random() * 35) + 15; // 15 - 50 (Garis selalu pendek/lokal)
+    const randomBlockSize = Math.floor(Math.random() * 30) + 15;
+    
+    // RUMUS EMAS: Max Distance Line DIKUNCI secara proporsional terhadap Block Size!
+    // Ini memastikan garis hanya menjangkau titik grid di sebelahnya, tidak pernah menyeberangi layar.
+    const maxLineDist = Math.floor(randomBlockSize * (Math.random() * 0.8 + 1.2)); 
 
     setConfig(prev => ({ ...prev,
         detectMode: ['Combined', 'Contrast', 'Bright', 'Dark'][Math.floor(Math.random() * 4)],
         seed: Math.floor(Math.random() * 1000),
         chainAngle: Math.floor(Math.random() * 360),
         
-        // Threshold dijaga moderat agar menangkap detail wajah tanpa over-exposure
-        threshold: Math.floor(Math.random() * 25) + 10, // 10 - 35
+        threshold: Math.floor(Math.random() * 50) + 15,
         
         blockSize: randomBlockSize,
-        maxDistanceLine: maxLineDist, 
+        maxDistanceLine: maxLineDist, // Variabel Kunci Anti-Kusut
         
-        shapeType: Math.random() > 0.7 ? 'Square' : 'Circle', 
-        // Titik diperbanyak untuk kepadatan konstelasi
-        maxCircles: Math.floor(Math.random() * 300) + 150, // 150 - 450
-        
-        // KUNCIAN ESTETIKA: Ketebalan garis & bentuk DIKUNCI tipis maksimal 0.4
-        lineWeight: Number((Math.random() * 0.3 + 0.1).toFixed(2)), // 0.1 - 0.4
-        shapeStroke: Number((Math.random() * 0.3 + 0.1).toFixed(2)) // 0.1 - 0.4
+        shapeType: Math.random() > 0.8 ? 'Square' : 'Circle', 
+        maxCircles: Math.floor(Math.random() * 200) + 50,
+        lineWeight: Number((Math.random() * 1.5 + 0.5).toFixed(1)),
+        shapeStroke: Number((Math.random() * 2.0 + 0.5).toFixed(1))
     }));
   };
 
