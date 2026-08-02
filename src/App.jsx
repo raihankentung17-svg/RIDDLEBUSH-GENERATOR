@@ -124,101 +124,8 @@ export default function App() {
   const [draggingStampId, setDraggingStampId] = useState(null);
   
   // ======================================================================
-  // MASTER MEMORY & IMAGE DATA CACHE
-  // ======================================================================
-  const imgDataRef = useRef(null);
-
-  const [config, setConfig] = useState({
-    imageOpacity: 0.85,
-    pixelSize: 16, zoneSize: 100, strokeOn: true,
-    gravityRadius: 200, gravityStrength: 0.8,
-    
-    // REBRANDING TEXT
-    textTL: 'Riddlebush Archive', textTR: 'Generative Engine', 
-    textBL: 'https://riddlebushapp.vercel.app/', textBR: 'Jakarta, Indonesia', frameTextSize: 12,
-    
-    // Crosshair Frame
-    frameOn: true, frameStyle: 'Blueprint', frameSize: 100, dashPattern: 20, frameStroke: 2, starSize: 80, starPoints: 8,
-    
-    chainOn: true, chainCount: 11, chainAngle: 45, chainBaseRadius: 250, chainSizeRatio: 0.79, intersectionsOn: true, markerSize: 50,
-    
-    // 4 Mode Detection Terpisah
-    detectMode: 'Contrast', // Pilihan: 'Combined', 'Contrast', 'Bright', 'Dark'
-    blockSize: 20, threshold: 25, maxCircles: 150,
-    
-    // Shapes & Connections
-    shapeType: 'Square', minRadius: 4, maxRadius: 24, shapeStroke: 1, 
-    seed: 525, labelSize: 10, overlayOpacity: 100, maxDistanceLine: 40, lineWeight: 0.8,
-    lineColor: 'rgba(255, 255, 255, 0.85)', bgColor: '#050505',
-    resolution: 'Portrait 4:5 (1080x1350)', textureOpacity: 0.50
-  });
-
-  const activeRes = RESOLUTIONS[config.resolution];
-
-  useEffect(() => { loadBaseImage(PRESET_IMAGES[0].url); }, []);
-
-  const loadBaseImage = (url) => {
-    const img = new Image(); img.crossOrigin = 'anonymous';
-    img.onload = () => { 
-        setBaseImage(img); setPixelZones([]); 
-        extractImageData(img);
-    }; 
-    img.src = url;
-  };
-
-  const handleImageUpload = (e, isTexture = false) => {
-    const file = e.target.files[0];
-    if (file) {
-      const url = URL.createObjectURL(file);
-      const img = new Image(); img.onload = () => { 
-        if (isTexture) setTextureImage(img); 
-        else { setBaseImage(img); setPixelZones([]); extractImageData(img); }
-      }; img.src = url;
-    }
-  };
-
-  // ======================================================================
-  // FUNGSI EKSTRAKSI DATA GAMBAR (Hanya jalan saat gambar berubah)
-  // ======================================================================
-  const extractImageData = useCallback((img = baseImage) => {
-      if(!img) return;
-      const { w, h } = activeRes;
-      const offCanvas = document.createElement('canvas');
-      offCanvas.width = w; offCanvas.height = h;
-      const ctx = offCanvas.getContext('2d', { willReadFrequently: true });
-      
-      const imgRatio = img.width / img.height; const canvasRatio = w / h;
-      let sWidth = img.width, sHeight = img.height, sx = 0, sy = 0;
-      if (imgRatio > canvasRatio) { sWidth = img.height * canvasRatio; sx = (img.width - sWidth) / 2; } 
-      else { sHeight = img.width / canvasRatio; sy = (img.height - sHeight) / 2; }
-      ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, w, h);
-      
-      try { imgDataRef.current = ctx.getImageData(0, 0, w, h).data; } catch (e) {}
-  }, [activeRes, baseImage]);
-
-  useEffect(() => { extractImageData(); }, [extractImageData]);
-
-  useEffect(() => {
-    if (!baseImage) return;
-    const offCanvas = document.createElement('canvas');
-    offCanvas.width = activeRes.w; offCanvas.height = activeRes.h;
-    const ctx = offCanvas.getContext('2d');
-    ctx.imageSmoothingEnabled = false;
-    const scale = Math.max(0.01, (100 - config.pixelSize) / 100); 
-    const sw = Math.max(1, activeRes.w * scale); const sh = Math.max(1, activeRes.h * scale);
-    const imgRatio = baseImage.width / baseImage.height; const canvasRatio = activeRes.w / activeRes.h;
-    let sWidth = baseImage.width, sHeight = baseImage.height, sx = 0, sy = 0;
-    if (imgRatio > canvasRatio) { sWidth = baseImage.height * canvasRatio; sx = (baseImage.width - sWidth) / 2; } 
-    else { sHeight = baseImage.width / canvasRatio; sy = (baseImage.height - sHeight) / 2; }
-    ctx.drawImage(baseImage, sx, sy, sWidth, sHeight, 0, 0, sw, sh);
-    ctx.drawImage(offCanvas, 0, 0, sw, sh, 0, 0, activeRes.w, activeRes.h);
-    setOffscreenPixelCanvas(offCanvas);
-  }, [baseImage, activeRes, config.pixelSize]);
-
-
-  // ======================================================================
-  // OTAK UTAMA: MONTE CARLO ORGANIC SAMPLING
-  // Menghasilkan distribusi titik konstelasi yang natural
+  // OTAK UTAMA: STRICT GRID MATRIX SCANNER (AKURASI DETEKSI)
+  // Menjamin pola rapi dan geometris (Tidak ada benang kusut)
   // ======================================================================
   const activeNodesFiltered = useMemo(() => {
       if (!imgDataRef.current) return [];
@@ -227,51 +134,61 @@ export default function App() {
       const imgData = imgDataRef.current;
       const bs = config.blockSize;
 
-      // Pseudo-random dinamis berdasar Seed untuk mengatur jitter dan label
-      let currentSeed = config.seed;
-      const random = () => { const x = Math.sin(currentSeed++) * 10000; return x - Math.floor(x); };
+      // DETERMINISTIC RANDOM: Mengunci angka acak pada koordinat pixel agar tidak berubah liar saat slider digeser
+      const getStableRandom = (x, y, seedOffset) => {
+          const val = Math.sin(x * 12.9898 + y * 78.233 + config.seed + seedOffset) * 43758.5453;
+          return val - Math.floor(val);
+      };
 
-      // MONTE CARLO ORGANIC SAMPLING: Menyebar titik secara natural seperti konstelasi
-      const attempts = Math.floor((w * h) / (bs * 1.5));
-      for (let i = 0; i < attempts; i++) {
-          const x = bs + (random() * (w - bs * 2));
-          const y = bs + (random() * (h - bs * 2));
-          const pxX = Math.floor(x); const pxY = Math.floor(y);
-          const pxIdx = (pxY * w + pxX) * 4;
-          const lumaCenter = (imgData[pxIdx] * 0.299 + imgData[pxIdx+1] * 0.587 + imgData[pxIdx+2] * 0.114);
+      const getLuma = (px, py) => {
+          if (px < 0 || px >= w || py < 0 || py >= h) return 0;
+          const idx = (Math.floor(py) * w + Math.floor(px)) * 4;
+          return (imgData[idx] * 0.299 + imgData[idx+1] * 0.587 + imgData[idx+2] * 0.114);
+      };
 
-          let score = 0;
+      // EXACT GRID SCANNER: Memastikan seluruh area wajah dipindai tanpa ada yang terlewat
+      for (let y = bs/2; y < h; y += bs) {
+          for (let x = bs/2; x < w; x += bs) {
+              const lumaCenter = getLuma(x, y);
+              let score = 0;
 
-          if (config.detectMode === 'Contrast') {
-              let maxLuma = lumaCenter; let minLuma = lumaCenter;
-              const offsets = [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]];
-              for (let [dx, dy] of offsets) {
-                  const nx = Math.floor(x + (dx * bs)); const ny = Math.floor(y + (dy * bs));
-                  const nIdx = (ny * w + nx) * 4;
-                  if (nIdx >= 0 && nIdx < imgData.length) {
-                      const luma = (imgData[nIdx] * 0.299 + imgData[nIdx+1] * 0.587 + imgData[nIdx+2] * 0.114);
-                      if (luma > maxLuma) maxLuma = luma; if (luma < minLuma) minLuma = luma;
-                  }
+              if (config.detectMode === 'Contrast') {
+                  // LOCAL CONTRAST: Hanya mengecek piksel radius 2px untuk sensitivitas pinggiran yang tajam
+                  let minL = lumaCenter, maxL = lumaCenter;
+                  const offset = 2; 
+                  const neighbors = [ getLuma(x - offset, y), getLuma(x + offset, y), getLuma(x, y - offset), getLuma(x, y + offset) ];
+                  for(let l of neighbors) { if (l > maxL) maxL = l; if (l < minL) minL = l; }
+                  // Boost sensitivitas x3
+                  score = Math.min(100, (Math.abs(maxL - minL) / 255) * 100 * 3);
+              } else if (config.detectMode === 'Combined') {
+                  const scoreBright = (lumaCenter / 255) * 100;
+                  const scoreDark = ((255 - lumaCenter) / 255) * 100;
+                  score = Math.max(scoreBright, scoreDark);
+              } else if (config.detectMode === 'Bright') {
+                  score = Math.pow(lumaCenter / 255, 0.8) * 100; // Logarithmic curve untuk sensitivitas
+              } else if (config.detectMode === 'Dark') {
+                  score = Math.pow((255 - lumaCenter) / 255, 0.8) * 100;
               }
-              score = (Math.abs(maxLuma - minLuma) / 255) * 100;
-          } else if (config.detectMode === 'Combined') {
-              const scoreBright = (lumaCenter / 255) * 100;
-              const scoreDark = ((255 - lumaCenter) / 255) * 100;
-              score = Math.max(scoreBright, scoreDark);
-          } else if (config.detectMode === 'Bright') {
-              score = (lumaCenter / 255) * 100;
-          } else if (config.detectMode === 'Dark') {
-              score = ((255 - lumaCenter) / 255) * 100;
-          }
-          
-          if (score >= config.threshold) {
-              candidates.push({ x, y, score, sizeBias: random(), labelVal1: random(), labelVal2: random() });
+              
+              if (score >= config.threshold) {
+                  // STABLE JITTER: Digeser sedikit dari kotak agar organik, tapi dikunci ke seed (tidak menari/flicker)
+                  const jitterX = (getStableRandom(x, y, 1) - 0.5) * (bs * 1.3);
+                  const jitterY = (getStableRandom(x, y, 2) - 0.5) * (bs * 1.3);
+                  
+                  candidates.push({ 
+                      x: x + jitterX, y: y + jitterY, score, 
+                      sizeBias: getStableRandom(x, y, 3), 
+                      labelVal1: getStableRandom(x, y, 4), labelVal2: getStableRandom(x, y, 5) 
+                  });
+              }
           }
       }
 
       // Mengurutkan dan mengambil titik dengan skor tertinggi (Top-Tier Sorting)
       candidates.sort((a, b) => b.score - a.score);
-      const topCandidates = candidates.slice(0, config.maxCircles);
+      // BYPASS BOTTLENECK UI: UI slider max 500 membuang 90% detail pixel. Kita kalikan 15 di internal engine!
+      const internalMaxCircles = config.maxCircles * 15; 
+      const topCandidates = candidates.slice(0, internalMaxCircles);
 
       return topCandidates.map(node => {
           const radius = config.minRadius + (node.sizeBias * (config.maxRadius - config.minRadius));
@@ -340,39 +257,35 @@ export default function App() {
     }
 
     // ==================================================================
-    // ALGORITMA PENYORTIRAN JARAK SPASIAL (K-NEAREST NEIGHBORS)
+    // ALGORITMA NEURAL WEB (K-NEAREST NEIGHBORS TINGKAT LANJUT)
     // ==================================================================
     ctx.globalAlpha = config.overlayOpacity / 100;
-    ctx.strokeStyle = config.lineColor; ctx.fillStyle = config.lineColor;
-    ctx.lineWidth = config.lineWeight;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     
     for (let i = 0; i < renderNodes.length; i++) {
         const n1 = renderNodes[i];
-        
         let neighbors = [];
         for (let j = i + 1; j < renderNodes.length; j++) {
             const n2 = renderNodes[j];
             const dist = Math.hypot(n1.x - n2.x, n1.y - n2.y);
-            if (dist <= config.maxDistanceLine) {
-                neighbors.push({ node: n2, dist: dist });
-            }
+            if (dist <= config.maxDistanceLine) neighbors.push({ node: n2, dist: dist });
         }
         
-        // MENGURUTKAN BERDASARKAN JARAK TERDEKAT. Garis hanya menyambung ke tetangga terdekat.
         neighbors.sort((a, b) => a.dist - b.dist);
         
-        // SAMBUNGAN ORGANIK: Dinamis dengan ketebalan dan transparansi berdasarkan jarak
-        const limit = Math.min(6, neighbors.length);
+        // KONEKSI ESTETIK: Max 3 sambungan agar elegan, garis konstan tipis, opacity pudar natural
+        const limit = Math.min(3, neighbors.length);
         for(let k = 0; k < limit; k++) {
             const neighbor = neighbors[k];
             ctx.beginPath(); 
             ctx.moveTo(n1.x, n1.y); 
             ctx.lineTo(neighbor.node.x, neighbor.node.y);
             
-            // ALPHA & WEIGHT DINAMIS: Dekat = tebal & terang, Jauh = tipis & pudar
-            const alpha = Math.max(0.05, 1 - (neighbor.dist / config.maxDistanceLine));
-            ctx.lineWidth = config.lineWeight * (alpha + 0.3);
-            ctx.strokeStyle = config.lineColor.replace(/[^,]+(?=\))/, alpha.toFixed(2)); 
+            const distRatio = neighbor.dist / config.maxDistanceLine;
+            const alpha = Math.max(0.02, Math.pow(1 - distRatio, 2) * 0.7); 
+            
+            ctx.lineWidth = Math.max(0.1, config.lineWeight * 0.3); 
+            ctx.strokeStyle = config.lineColor.replace(/[^,]+(?=\))/, alpha.toFixed(3)); 
             ctx.stroke();
         }
     }
