@@ -557,25 +557,28 @@ export default function App() {
   // SMART RANDOMIZER: RUMUS KUNCI ANTI-KUSUT SPAGHETTI
   // ======================================================================
   const randomizeAll = () => {
-    const randomBlockSize = Math.floor(Math.random() * 30) + 15;
-    
-    // ORGANIC REACH: Jarak sambungan dilonggarkan agar bebas membentuk konstelasi jaring
-    const maxLineDist = Math.floor(Math.random() * 150) + 50; 
+    // AESTHETIC SWEET SPOT: Mengunci rentang acak pada rasio emas agar selalu elegan
+    const randomBlockSize = Math.floor(Math.random() * 12) + 8; // 8 - 20 (Sangat detail/halus)
+    const maxLineDist = Math.floor(Math.random() * 35) + 15; // 15 - 50 (Garis selalu pendek/lokal)
 
     setConfig(prev => ({ ...prev,
         detectMode: ['Combined', 'Contrast', 'Bright', 'Dark'][Math.floor(Math.random() * 4)],
         seed: Math.floor(Math.random() * 1000),
         chainAngle: Math.floor(Math.random() * 360),
         
-        threshold: Math.floor(Math.random() * 50) + 15,
+        // Threshold dijaga moderat agar menangkap detail wajah tanpa over-exposure
+        threshold: Math.floor(Math.random() * 25) + 10, // 10 - 35
         
         blockSize: randomBlockSize,
-        maxDistanceLine: maxLineDist, // Variabel Kunci Anti-Kusut
+        maxDistanceLine: maxLineDist, 
         
-        shapeType: Math.random() > 0.8 ? 'Square' : 'Circle', 
-        maxCircles: Math.floor(Math.random() * 200) + 50,
-        lineWeight: Number((Math.random() * 1.5 + 0.5).toFixed(1)),
-        shapeStroke: Number((Math.random() * 2.0 + 0.5).toFixed(1))
+        shapeType: Math.random() > 0.7 ? 'Square' : 'Circle', 
+        // Titik diperbanyak untuk kepadatan konstelasi
+        maxCircles: Math.floor(Math.random() * 300) + 150, // 150 - 450
+        
+        // KUNCIAN ESTETIKA: Ketebalan garis & bentuk DIKUNCI tipis maksimal 0.4
+        lineWeight: Number((Math.random() * 0.3 + 0.1).toFixed(2)), // 0.1 - 0.4
+        shapeStroke: Number((Math.random() * 0.3 + 0.1).toFixed(2)) // 0.1 - 0.4
     }));
   };
 
