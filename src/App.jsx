@@ -217,8 +217,8 @@ export default function App() {
 
 
   // ======================================================================
-  // OTAK UTAMA: STRICT GRID MATRIX SCANNER (AKURASI DETEKSI)
-  // Menjamin pola rapi dan geometris (Tidak ada benang kusut)
+  // OTAK UTAMA: MONTE CARLO ORGANIC SAMPLING
+  // Menghasilkan distribusi titik konstelasi yang natural
   // ======================================================================
   const activeNodesFiltered = useMemo(() => {
       if (!imgDataRef.current) return [];
@@ -231,49 +231,41 @@ export default function App() {
       let currentSeed = config.seed;
       const random = () => { const x = Math.sin(currentSeed++) * 10000; return x - Math.floor(x); };
 
-      // LOOPING STRICT GRID: Hanya mengecek piksel pada persimpangan garis kotak
-      for (let y = bs; y < h - bs; y += bs) {
-          for (let x = bs; x < w - bs; x += bs) {
-              const pxIdx = (y * w + x) * 4;
-              const lumaCenter = (imgData[pxIdx] * 0.299 + imgData[pxIdx+1] * 0.587 + imgData[pxIdx+2] * 0.114);
+      // MONTE CARLO ORGANIC SAMPLING: Menyebar titik secara natural seperti konstelasi
+      const attempts = Math.floor((w * h) / (bs * 1.5));
+      for (let i = 0; i < attempts; i++) {
+          const x = bs + (random() * (w - bs * 2));
+          const y = bs + (random() * (h - bs * 2));
+          const pxX = Math.floor(x); const pxY = Math.floor(y);
+          const pxIdx = (pxY * w + pxX) * 4;
+          const lumaCenter = (imgData[pxIdx] * 0.299 + imgData[pxIdx+1] * 0.587 + imgData[pxIdx+2] * 0.114);
 
-              let score = 0;
+          let score = 0;
 
-              // 4 MODE DETEKSI TERPISAH MURNI (Sesuai Video Referensi)
-              if (config.detectMode === 'Contrast') {
-                  let maxLuma = lumaCenter; let minLuma = lumaCenter;
-                  const offsets = [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]];
-                  for (let [dx, dy] of offsets) {
-                      const nx = x + (dx * bs); const ny = y + (dy * bs);
-                      const nIdx = (ny * w + nx) * 4;
-                      if (nIdx >= 0 && nIdx < imgData.length) {
-                          const luma = (imgData[nIdx] * 0.299 + imgData[nIdx+1] * 0.587 + imgData[nIdx+2] * 0.114);
-                          if (luma > maxLuma) maxLuma = luma; if (luma < minLuma) minLuma = luma;
-                      }
+          if (config.detectMode === 'Contrast') {
+              let maxLuma = lumaCenter; let minLuma = lumaCenter;
+              const offsets = [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]];
+              for (let [dx, dy] of offsets) {
+                  const nx = Math.floor(x + (dx * bs)); const ny = Math.floor(y + (dy * bs));
+                  const nIdx = (ny * w + nx) * 4;
+                  if (nIdx >= 0 && nIdx < imgData.length) {
+                      const luma = (imgData[nIdx] * 0.299 + imgData[nIdx+1] * 0.587 + imgData[nIdx+2] * 0.114);
+                      if (luma > maxLuma) maxLuma = luma; if (luma < minLuma) minLuma = luma;
                   }
-                  score = (Math.abs(maxLuma - minLuma) / 255) * 100;
-                  
-              } else if (config.detectMode === 'Combined') {
-                  // Mencari Titik Paling Terang DAN Paling Gelap
-                  const scoreBright = (lumaCenter / 255) * 100;
-                  const scoreDark = ((255 - lumaCenter) / 255) * 100;
-                  score = Math.max(scoreBright, scoreDark);
-                  
-              } else if (config.detectMode === 'Bright') {
-                  score = (lumaCenter / 255) * 100;
-                  
-              } else if (config.detectMode === 'Dark') {
-                  score = ((255 - lumaCenter) / 255) * 100;
               }
-              
-              if (score >= config.threshold) {
-                  // DISTORSI ORGANIK (JITTER): Geser sedikit dari titik pusat grid agar natural
-                  const jitterX = (random() - 0.5) * (bs * 0.6);
-                  const jitterY = (random() - 0.5) * (bs * 0.6);
-                  const finalX = x + jitterX; const finalY = y + jitterY;
-                  
-                  candidates.push({ x: finalX, y: finalY, score, sizeBias: random(), labelVal1: random(), labelVal2: random() });
-              }
+              score = (Math.abs(maxLuma - minLuma) / 255) * 100;
+          } else if (config.detectMode === 'Combined') {
+              const scoreBright = (lumaCenter / 255) * 100;
+              const scoreDark = ((255 - lumaCenter) / 255) * 100;
+              score = Math.max(scoreBright, scoreDark);
+          } else if (config.detectMode === 'Bright') {
+              score = (lumaCenter / 255) * 100;
+          } else if (config.detectMode === 'Dark') {
+              score = ((255 - lumaCenter) / 255) * 100;
+          }
+          
+          if (score >= config.threshold) {
+              candidates.push({ x, y, score, sizeBias: random(), labelVal1: random(), labelVal2: random() });
           }
       }
 
@@ -369,14 +361,18 @@ export default function App() {
         // MENGURUTKAN BERDASARKAN JARAK TERDEKAT. Garis hanya menyambung ke tetangga terdekat.
         neighbors.sort((a, b) => a.dist - b.dist);
         
-        // Membatasi maksimal 5 sambungan per titik agar rapi membentuk poligon
-        const limit = Math.min(5, neighbors.length);
+        // SAMBUNGAN ORGANIK: Dinamis dengan ketebalan dan transparansi berdasarkan jarak
+        const limit = Math.min(6, neighbors.length);
         for(let k = 0; k < limit; k++) {
+            const neighbor = neighbors[k];
             ctx.beginPath(); 
             ctx.moveTo(n1.x, n1.y); 
-            ctx.lineTo(neighbors[k].node.x, neighbors[k].node.y);
-            // SOLID LINE: Garis tegas tanpa gradasi pudar
-            ctx.strokeStyle = config.lineColor.replace(/[^,]+(?=\))/, '0.85'); 
+            ctx.lineTo(neighbor.node.x, neighbor.node.y);
+            
+            // ALPHA & WEIGHT DINAMIS: Dekat = tebal & terang, Jauh = tipis & pudar
+            const alpha = Math.max(0.05, 1 - (neighbor.dist / config.maxDistanceLine));
+            ctx.lineWidth = config.lineWeight * (alpha + 0.3);
+            ctx.strokeStyle = config.lineColor.replace(/[^,]+(?=\))/, alpha.toFixed(2)); 
             ctx.stroke();
         }
     }
@@ -563,9 +559,8 @@ export default function App() {
   const randomizeAll = () => {
     const randomBlockSize = Math.floor(Math.random() * 30) + 15;
     
-    // RUMUS EMAS: Max Distance Line DIKUNCI secara proporsional terhadap Block Size!
-    // Ini memastikan garis hanya menjangkau titik grid di sebelahnya, tidak pernah menyeberangi layar.
-    const maxLineDist = Math.floor(randomBlockSize * (Math.random() * 0.8 + 1.2)); 
+    // ORGANIC REACH: Jarak sambungan dilonggarkan agar bebas membentuk konstelasi jaring
+    const maxLineDist = Math.floor(Math.random() * 150) + 50; 
 
     setConfig(prev => ({ ...prev,
         detectMode: ['Combined', 'Contrast', 'Bright', 'Dark'][Math.floor(Math.random() * 4)],
