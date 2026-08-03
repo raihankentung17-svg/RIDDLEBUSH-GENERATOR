@@ -215,20 +215,13 @@ export default function App() {
     }
   }, [baseImage, activeRes, config.pixelSize]);
 
-  // ======================================================================
-  // DETERMINISTIC SCANNER & LOCAL CONTRAST (Anti-Crash Wrap)
-  // ======================================================================
   const activeNodesFiltered = useMemo(() => {
       try {
-          // Safeguard: Ensure imageData exists before processing
-          if (!imgDataRef.current || imgDataRef.current.length === 0) return [];
-          
+          if (!imgDataRef.current) return [];
           const candidates = [];
           const { w, h } = activeRes;
           const imgData = imgDataRef.current;
-          
-          // Safeguard: Prevent division by zero or negative block sizes
-          const bs = Math.max(2, config.blockSize || 20); 
+          const bs = config.blockSize || 20;
 
           const getStableRandom = (x, y, seedOffset) => {
               const val = Math.sin(x * 12.9898 + y * 78.233 + config.seed + seedOffset) * 43758.5453;
@@ -238,8 +231,6 @@ export default function App() {
           const getLuma = (px, py) => {
               if (px < 0 || px >= w || py < 0 || py >= h) return 0;
               const idx = (Math.floor(py) * w + Math.floor(px)) * 4;
-              // Safeguard: Check array bounds
-              if (idx < 0 || idx >= imgData.length - 2) return 0;
               return (imgData[idx] * 0.299 + imgData[idx+1] * 0.587 + imgData[idx+2] * 0.114);
           };
 
@@ -250,7 +241,7 @@ export default function App() {
 
                   if (config.detectMode === 'Contrast') {
                       let minL = lumaCenter, maxL = lumaCenter;
-                      const offset = 2; 
+                      const offset = Math.max(2, Math.floor(bs/4)); 
                       const neighbors = [ getLuma(x - offset, y), getLuma(x + offset, y), getLuma(x, y - offset), getLuma(x, y + offset) ];
                       for(let l of neighbors) { if (l > maxL) maxL = l; if (l < minL) minL = l; }
                       score = Math.min(100, (Math.abs(maxL - minL) / 255) * 100 * 3);
@@ -265,10 +256,8 @@ export default function App() {
                   }
                   
                   if (score >= config.threshold) {
-                      const jitterX = (getStableRandom(x, y, 1) - 0.5) * (bs * 1.3);
-                      const jitterY = (getStableRandom(x, y, 2) - 0.5) * (bs * 1.3);
                       candidates.push({ 
-                          x: x + jitterX, y: y + jitterY, score, 
+                          x: x, y: y, score, 
                           sizeBias: getStableRandom(x, y, 3), 
                           labelVal1: getStableRandom(x, y, 4), labelVal2: getStableRandom(x, y, 5) 
                       });
@@ -277,56 +266,56 @@ export default function App() {
           }
 
           candidates.sort((a, b) => b.score - a.score);
-          const internalMaxCircles = (config.maxCircles || 150) * 15; 
-          const topCandidates = candidates.slice(0, internalMaxCircles);
+          
+          const internalMinDist = bs * 0.85; 
+          const filteredCandidates = [];
+          
+          for (let i = 0; i < candidates.length; i++) {
+              if (filteredCandidates.length >= (config.maxCircles || 150)) break;
+              
+              const curr = candidates[i];
+              let tooClose = false;
+              for (let j = 0; j < filteredCandidates.length; j++) {
+                  if (Math.hypot(curr.x - filteredCandidates[j].x, curr.y - filteredCandidates[j].y) < internalMinDist) {
+                      tooClose = true; break;
+                  }
+              }
+              if (!tooClose) filteredCandidates.push(curr);
+          }
 
-          return topCandidates.map(node => {
+          return filteredCandidates.map(node => {
               const radius = config.minRadius + (node.sizeBias * (config.maxRadius - config.minRadius));
               let label = '';
               if (node.labelVal1 < 0.3) label = `${Math.floor(node.x)}x${Math.floor(node.y)}`;
               else if (node.labelVal1 < 0.6) label = `R: ${(node.labelVal2 * 100).toFixed(2)}`;
               else label = `${Math.floor(node.labelVal1 * 50)}+${Math.floor(node.labelVal2 * 50)}`;
-              
-              // Map output correctly
               return { baseX: node.x, baseY: node.y, x: node.x, y: node.y, radius, label };
           });
       } catch (error) {
-          console.error("System Engine Node Calculation Error:", error);
+          console.error("System Engine Error:", error);
           return []; 
       }
   }, [activeRes, config.detectMode, config.threshold, config.blockSize, config.maxCircles, config.minRadius, config.maxRadius, config.seed]);
 
-
-  // ======================================================================
-  // RENDER CANVAS (ANTI-CRASH) & NEURAL WEB
-  // ======================================================================
   const renderCanvas = useCallback(() => {
     try {
-        if (!canvasRef.current) return;
+        if (!canvasRef.current || !baseImage) return;
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
         const { w, h } = activeRes;
 
-        // Base Clear
-        ctx.clearRect(0, 0, w, h); 
-        ctx.fillStyle = config.bgColor; 
-        ctx.fillRect(0, 0, w, h);
+        ctx.clearRect(0, 0, w, h); ctx.fillStyle = config.bgColor; ctx.fillRect(0, 0, w, h);
 
-        // 1. Draw Base Image (if loaded)
-        if (baseImage) {
-            ctx.globalAlpha = config.imageOpacity;
-            const imgRatio = baseImage.width / baseImage.height; const canvasRatio = w / h;
-            let sWidth = baseImage.width, sHeight = baseImage.height, sx = 0, sy = 0;
-            if (imgRatio > canvasRatio) { sWidth = baseImage.height * canvasRatio; sx = (baseImage.width - sWidth) / 2; } 
-            else { sHeight = baseImage.width / canvasRatio; sy = (baseImage.height - sHeight) / 2; }
-            ctx.drawImage(baseImage, sx, sy, sWidth, sHeight, 0, 0, w, h);
-            ctx.globalAlpha = 1.0;
-        }
+        ctx.globalAlpha = config.imageOpacity;
+        const imgRatio = baseImage.width / baseImage.height; const canvasRatio = w / h;
+        let sWidth = baseImage.width, sHeight = baseImage.height, sx = 0, sy = 0;
+        if (imgRatio > canvasRatio) { sWidth = baseImage.height * canvasRatio; sx = (baseImage.width - sWidth) / 2; } 
+        else { sHeight = baseImage.width / canvasRatio; sy = (baseImage.height - sHeight) / 2; }
+        ctx.drawImage(baseImage, sx, sy, sWidth, sHeight, 0, 0, w, h);
+        ctx.globalAlpha = 1.0;
 
-        // 2. Pixel Zones
-        if (offscreenPixelCanvas && Array.isArray(pixelZones) && pixelZones.length > 0) {
+        if (offscreenPixelCanvas && pixelZones.length > 0) {
             pixelZones.forEach(zone => {
-                if(!zone || typeof zone.x !== 'number') return;
                 const zs = config.zoneSize; const zx = zone.x - zs/2; const zy = zone.y - zs/2;
                 ctx.drawImage(offscreenPixelCanvas, zx, zy, zs, zs, zx, zy, zs, zs);
                 if (config.strokeOn) { 
@@ -336,37 +325,27 @@ export default function App() {
             });
         }
 
-        // 3. Gravity Calculation
         const safeNodes = Array.isArray(activeNodesFiltered) ? activeNodesFiltered : [];
         const renderNodes = safeNodes.map(node => {
-            if(!node) return {x:0, y:0, radius:1, label:''};
             let nx = node.baseX, ny = node.baseY;
-            if (Array.isArray(gravityZones)) {
-                gravityZones.forEach(gz => {
-                    if(!gz) return;
-                    const dx = nx - gz.x; const dy = ny - gz.y; const dist = Math.hypot(dx, dy);
-                    if (dist < config.gravityRadius) {
-                        const pull = (config.gravityRadius - dist) / config.gravityRadius;
-                        nx -= dx * pull * config.gravityStrength; ny -= dy * pull * config.gravityStrength;
-                    }
-                });
-            }
+            gravityZones.forEach(gz => {
+                const dx = nx - gz.x; const dy = ny - gz.y; const dist = Math.hypot(dx, dy);
+                if (dist < config.gravityRadius) {
+                    const pull = (config.gravityRadius - dist) / config.gravityRadius;
+                    nx -= dx * pull * config.gravityStrength; ny -= dy * pull * config.gravityStrength;
+                }
+            });
             return { ...node, x: nx, y: ny };
         });
 
-        // Gravity Visualizer
-        if (activeTool === 'Gravity' && Array.isArray(gravityZones)) {
+        if (activeTool === 'Gravity' && gravityZones.length > 0) {
             gravityZones.forEach(gz => {
-                if(!gz) return;
                 ctx.beginPath(); ctx.arc(gz.x, gz.y, config.gravityRadius, 0, Math.PI*2);
                 ctx.strokeStyle = config.gravityStrength > 0 ? 'rgba(0,255,0,0.3)' : 'rgba(255,0,0,0.3)';
                 ctx.setLineDash([5, 5]); ctx.stroke(); ctx.setLineDash([]);
             });
         }
 
-        // ==================================================================
-        // ALGORITMA NEURAL WEB (K-NEAREST NEIGHBORS TINGKAT LANJUT)
-        // ==================================================================
         ctx.globalAlpha = config.overlayOpacity / 100;
         ctx.lineCap = 'round'; ctx.lineJoin = 'round';
         
@@ -381,8 +360,7 @@ export default function App() {
             
             neighbors.sort((a, b) => a.dist - b.dist);
             
-            // KONEKSI ESTETIK: Max 3 sambungan agar elegan, garis konstan tipis, opacity pudar natural
-            const limit = Math.min(3, neighbors.length);
+            const limit = Math.min(8, neighbors.length);
             for(let k = 0; k < limit; k++) {
                 const neighbor = neighbors[k];
                 ctx.beginPath(); 
@@ -390,26 +368,18 @@ export default function App() {
                 ctx.lineTo(neighbor.node.x, neighbor.node.y);
                 
                 const distRatio = neighbor.dist / config.maxDistanceLine;
-                const alpha = Math.max(0.02, Math.pow(1 - distRatio, 2) * 0.7); 
+                const alpha = Math.max(0.05, (1 - distRatio) * 0.9); 
                 
-                ctx.lineWidth = Math.max(0.1, config.lineWeight * 0.3); 
-                // Safeguard against invalid lineColor string format
-                const safeColor = (typeof config.lineColor === 'string' && config.lineColor.includes('rgba')) 
-                    ? config.lineColor.replace(/[^,]+(?=\))/, alpha.toFixed(3)) 
-                    : `rgba(255,255,255,${alpha.toFixed(3)})`;
-                ctx.strokeStyle = safeColor;
+                ctx.lineWidth = Math.max(0.1, config.lineWeight * 0.45); 
+                ctx.strokeStyle = config.lineColor.replace(/[^,]+(?=\))/, alpha.toFixed(3)); 
                 ctx.stroke();
             }
         }
 
-        // Render Shapes
         renderNodes.forEach(node => {
-            const renderRadius = Math.max(0.1, node.radius * 0.25); 
-            ctx.strokeStyle = (typeof config.lineColor === 'string' && config.lineColor.includes('rgba')) 
-                ? config.lineColor.replace(/[^,]+(?=\))/, '0.35') 
-                : 'rgba(255,255,255,0.35)'; 
+            const renderRadius = node.radius * 0.25; 
+            ctx.strokeStyle = config.lineColor.replace(/[^,]+(?=\))/, '0.35'); 
             ctx.lineWidth = Math.max(0.1, config.shapeStroke * 0.4); 
-            
             ctx.beginPath();
             if (config.shapeType === 'Circle') ctx.arc(node.x, node.y, renderRadius, 0, Math.PI * 2);
             else ctx.rect(node.x - renderRadius, node.y - renderRadius, renderRadius * 2, renderRadius * 2);
@@ -423,18 +393,14 @@ export default function App() {
             ctx.stroke();
 
             if (config.labelSize > 0) {
-                ctx.fillStyle = (typeof config.lineColor === 'string' && config.lineColor.includes('rgba')) 
-                    ? config.lineColor.replace(/[^,]+(?=\))/, '0.8') 
-                    : 'rgba(255,255,255,0.8)';
+                ctx.fillStyle = config.lineColor.replace(/[^,]+(?=\))/, '0.8');
                 ctx.font = `${config.labelSize}px "Courier New", monospace`;
-                ctx.fillText(node.label || '', node.x + renderRadius + 4, node.y - renderRadius - 2);
+                ctx.fillText(node.label, node.x + renderRadius + 4, node.y - renderRadius - 2);
             }
         });
 
-        // Render Custom Stamps
         if (Array.isArray(customStamps)) {
             customStamps.forEach(stamp => {
-                if(!stamp) return;
                 ctx.fillStyle = config.lineColor;
                 ctx.font = `600 ${stamp.size}px "Space Mono", monospace`;
                 ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -444,15 +410,12 @@ export default function App() {
             });
         }
 
-        // Render Chain
         if (config.chainOn) {
             const drawChainSide = (directionAngle) => {
                 let cx = w/2, cy = h/2, r = config.chainBaseRadius;
                 const angleRad = directionAngle * (Math.PI / 180);
-                ctx.lineWidth = Math.max(0.1, config.shapeStroke); 
-                const chainColor = (typeof config.lineColor === 'string' && config.lineColor.includes('rgba')) 
-                    ? config.lineColor.replace(/[^,]+(?=\))/, '0.6') 
-                    : 'rgba(255,255,255,0.6)';
+                ctx.lineWidth = config.shapeStroke; 
+                const chainColor = config.lineColor.replace(/[^,]+(?=\))/, '0.6');
                 ctx.strokeStyle = chainColor; ctx.fillStyle = chainColor;
 
                 for (let i = 0; i < config.chainCount; i++) {
@@ -470,24 +433,17 @@ export default function App() {
             drawChainSide(config.chainAngle); drawChainSide(config.chainAngle + 180);
         }
 
-        // Render Frame
         if (config.frameOn) {
             const m = config.frameSize; const cx = w / 2; const cy = h / 2;
-            const safeFrameColor = (typeof config.lineColor === 'string' && config.lineColor.includes('rgba')) 
-                ? config.lineColor.replace(/[^,]+(?=\))/, '0.6') : 'rgba(255,255,255,0.6)';
-            
-            ctx.strokeStyle = safeFrameColor; 
-            ctx.lineWidth = Math.max(0.1, config.frameStroke); 
+            ctx.strokeStyle = config.lineColor.replace(/[^,]+(?=\))/, '0.6'); 
+            ctx.lineWidth = config.frameStroke; 
             if (config.dashPattern > 0) ctx.setLineDash([config.dashPattern, config.dashPattern]);
             ctx.strokeRect(m, m, w - m*2, h - m*2); 
-            
             if (config.frameStyle === 'Blueprint') {
                 ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, h); ctx.moveTo(0, cy); ctx.lineTo(w, cy); ctx.stroke();
             }
-            
             ctx.setLineDash([]); 
-            ctx.strokeStyle = (typeof config.lineColor === 'string' && config.lineColor.includes('rgba')) 
-                ? config.lineColor.replace(/[^,]+(?=\))/, '0.9') : 'rgba(255,255,255,0.9)';
+            ctx.strokeStyle = config.lineColor.replace(/[^,]+(?=\))/, '0.9');
 
             if (config.frameStyle === 'Blueprint') {
                 const cl = 30 + config.frameStroke * 2; 
@@ -527,22 +483,19 @@ export default function App() {
             }
         }
 
-        // Teks Sudut
-        ctx.fillStyle = (typeof config.lineColor === 'string' && config.lineColor.includes('rgba')) 
-            ? config.lineColor.replace(/[^,]+(?=\))/, '0.9') : 'rgba(255,255,255,0.9)'; 
+        ctx.fillStyle = config.lineColor.replace(/[^,]+(?=\))/, '0.9'); 
         ctx.font = `300 ${config.frameTextSize}px "Space Mono", monospace`;
         const textPad = config.frameOn ? config.frameSize - 20 : 30;
-        ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText(config.textTL || '', textPad, textPad);
-        ctx.textAlign = 'right'; ctx.fillText(config.textTR || '', w - textPad, textPad);
-        ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; ctx.fillText(config.textBL || '', textPad, h - textPad);
-        ctx.textAlign = 'right'; ctx.fillText(config.textBR || '', w - textPad, h - textPad);
+        ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText(config.textTL, textPad, textPad);
+        ctx.textAlign = 'right'; ctx.fillText(config.textTR, w - textPad, textPad);
+        ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; ctx.fillText(config.textBL, textPad, h - textPad);
+        ctx.textAlign = 'right'; ctx.fillText(config.textBR, w - textPad, h - textPad);
 
-        // Tekstur
         ctx.globalAlpha = config.textureOpacity;
         if (textureImage) { ctx.globalCompositeOperation = 'overlay'; ctx.drawImage(textureImage, 0, 0, w, h); } 
         ctx.globalAlpha = 1.0; ctx.globalCompositeOperation = 'source-over';
-    } catch(error) {
-        console.error("Critical Render Loop Error Caught:", error);
+    } catch(e) {
+        console.error("Render Loop Error:", e);
     }
   }, [baseImage, activeRes, config, activeNodesFiltered, pixelZones, gravityZones, customStamps, draggingStampId, offscreenPixelCanvas, textureImage, activeTool]);
 
