@@ -9,7 +9,7 @@ const Icons = {
 };
 
 // ======================================================================
-// KOMPONEN UI KUSTOM (Diperbarui ke Tema Mega Studio)
+// KOMPONEN UI KUSTOM
 // ======================================================================
 const Accordion = ({ title, children, defaultOpen = false }) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -86,7 +86,7 @@ const ButtonGroup = ({ options, active, onChange }) => (
 );
 
 // ======================================================================
-// KONFIGURASI GLOBAL & RESOLUSI (TIDAK DISENTUH LOGIKANYA)
+// KONFIGURASI GLOBAL & RESOLUSI
 // ======================================================================
 const RESOLUTIONS = {
   'Square 1:1 (1080x1080)': { w: 1080, h: 1080 },
@@ -105,35 +105,130 @@ const PRESET_IMAGES = [
 
 export default function App() {
   const canvasRef = useRef(null);
+  const imgDataRef = useRef(null); // MASTER MEMORY & IMAGE DATA CACHE
   
   // State Gambar
   const [baseImage, setBaseImage] = useState(null);
   const [textureImage, setTextureImage] = useState(null);
   const [offscreenPixelCanvas, setOffscreenPixelCanvas] = useState(null);
   
-  // State Interaksi (Sensor, Gravitasi, Tipografi)
-  const [activeTool, setActiveTool] = useState('Pixelate'); // Pixelate, Gravity, Move Text
+  // State Interaksi
+  const [activeTool, setActiveTool] = useState('Pixelate');
   const [isInteracting, setIsInteracting] = useState(false);
-  
   const [pixelZones, setPixelZones] = useState([]);
   const [gravityZones, setGravityZones] = useState([]);
   
-  // Custom Stamps (Typography)
+  // Custom Stamps (Typography) & Export Status
   const [stampInput, setStampInput] = useState('CLASSIFIED DATA');
   const [customStamps, setCustomStamps] = useState([]);
   const [draggingStampId, setDraggingStampId] = useState(null);
-  
+  const [exportStatus, setExportStatus] = useState('');
+
+  // Konfigurasi Utama
+  const [config, setConfig] = useState({
+    imageOpacity: 0.85,
+    pixelSize: 16, zoneSize: 100, strokeOn: true,
+    gravityRadius: 200, gravityStrength: 0.8,
+    
+    textTL: 'Riddlebush Archive', textTR: 'Generative Engine', 
+    textBL: 'https://riddlebushapp.vercel.app/', textBR: 'Jakarta, Indonesia', frameTextSize: 12,
+    
+    frameOn: true, frameStyle: 'Blueprint', frameSize: 100, dashPattern: 20, frameStroke: 2, starSize: 80, starPoints: 8,
+    chainOn: true, chainCount: 11, chainAngle: 45, chainBaseRadius: 250, chainSizeRatio: 0.79, intersectionsOn: true, markerSize: 50,
+    
+    detectMode: 'Contrast', 
+    blockSize: 20, threshold: 25, maxCircles: 150,
+    
+    shapeType: 'Square', minRadius: 4, maxRadius: 24, shapeStroke: 1, 
+    seed: 525, labelSize: 10, overlayOpacity: 100, maxDistanceLine: 40, lineWeight: 0.8,
+    lineColor: 'rgba(255, 255, 255, 0.85)', bgColor: '#050505',
+    resolution: 'Portrait 4:5 (1080x1350)', textureOpacity: 0.50
+  });
+
+  const activeRes = RESOLUTIONS[config.resolution];
+
+  useEffect(() => { loadBaseImage(PRESET_IMAGES[0].url); }, []);
+
+  const extractImageData = useCallback((img = baseImage) => {
+      if(!img) return;
+      try {
+          const { w, h } = activeRes;
+          const offCanvas = document.createElement('canvas');
+          offCanvas.width = w; offCanvas.height = h;
+          const ctx = offCanvas.getContext('2d', { willReadFrequently: true });
+          
+          const imgRatio = img.width / img.height; const canvasRatio = w / h;
+          let sWidth = img.width, sHeight = img.height, sx = 0, sy = 0;
+          if (imgRatio > canvasRatio) { sWidth = img.height * canvasRatio; sx = (img.width - sWidth) / 2; } 
+          else { sHeight = img.width / canvasRatio; sy = (img.height - sHeight) / 2; }
+          ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, w, h);
+          
+          imgDataRef.current = ctx.getImageData(0, 0, w, h).data;
+      } catch (error) {
+          console.error("Failed to extract image data (CORS or setup issue):", error);
+          imgDataRef.current = null;
+      }
+  }, [activeRes, baseImage]);
+
+  const loadBaseImage = (url) => {
+    const img = new Image(); img.crossOrigin = 'anonymous';
+    img.onload = () => { 
+        setBaseImage(img); setPixelZones([]); 
+        extractImageData(img);
+    }; 
+    img.src = url;
+  };
+
+  const handleImageUpload = (e, isTexture = false) => {
+    const file = e.target.files[0];
+    if (file) {
+      const url = URL.createObjectURL(file);
+      const img = new Image(); img.onload = () => { 
+        if (isTexture) setTextureImage(img); 
+        else { setBaseImage(img); setPixelZones([]); extractImageData(img); }
+      }; img.src = url;
+    }
+  };
+
+  useEffect(() => { extractImageData(); }, [extractImageData]);
+
+  useEffect(() => {
+    if (!baseImage) return;
+    try {
+        const offCanvas = document.createElement('canvas');
+        offCanvas.width = activeRes.w; offCanvas.height = activeRes.h;
+        const ctx = offCanvas.getContext('2d');
+        ctx.imageSmoothingEnabled = false;
+        const scale = Math.max(0.01, (100 - config.pixelSize) / 100); 
+        const sw = Math.max(1, activeRes.w * scale); const sh = Math.max(1, activeRes.h * scale);
+        
+        const imgRatio = baseImage.width / baseImage.height; const canvasRatio = activeRes.w / activeRes.h;
+        let sWidth = baseImage.width, sHeight = baseImage.height, sx = 0, sy = 0;
+        if (imgRatio > canvasRatio) { sWidth = baseImage.height * canvasRatio; sx = (baseImage.width - sWidth) / 2; } 
+        else { sHeight = baseImage.width / canvasRatio; sy = (baseImage.height - sHeight) / 2; }
+        
+        ctx.drawImage(baseImage, sx, sy, sWidth, sHeight, 0, 0, sw, sh);
+        ctx.drawImage(offCanvas, 0, 0, sw, sh, 0, 0, activeRes.w, activeRes.h);
+        setOffscreenPixelCanvas(offCanvas);
+    } catch (e) {
+        console.error("Error creating pixelation offscreen canvas:", e);
+    }
+  }, [baseImage, activeRes, config.pixelSize]);
+
   // ======================================================================
-  // OTAK UTAMA: STRICT GRID MATRIX SCANNER (AKURASI DETEKSI)
-  // Menjamin pola rapi dan geometris (Tidak ada benang kusut)
+  // DETERMINISTIC SCANNER & LOCAL CONTRAST (Anti-Crash Wrap)
   // ======================================================================
   const activeNodesFiltered = useMemo(() => {
       try {
-          if (!imgDataRef.current) return [];
+          // Safeguard: Ensure imageData exists before processing
+          if (!imgDataRef.current || imgDataRef.current.length === 0) return [];
+          
           const candidates = [];
           const { w, h } = activeRes;
           const imgData = imgDataRef.current;
-          const bs = config.blockSize || 20;
+          
+          // Safeguard: Prevent division by zero or negative block sizes
+          const bs = Math.max(2, config.blockSize || 20); 
 
           const getStableRandom = (x, y, seedOffset) => {
               const val = Math.sin(x * 12.9898 + y * 78.233 + config.seed + seedOffset) * 43758.5453;
@@ -143,6 +238,8 @@ export default function App() {
           const getLuma = (px, py) => {
               if (px < 0 || px >= w || py < 0 || py >= h) return 0;
               const idx = (Math.floor(py) * w + Math.floor(px)) * 4;
+              // Safeguard: Check array bounds
+              if (idx < 0 || idx >= imgData.length - 2) return 0;
               return (imgData[idx] * 0.299 + imgData[idx+1] * 0.587 + imgData[idx+2] * 0.114);
           };
 
@@ -189,37 +286,47 @@ export default function App() {
               if (node.labelVal1 < 0.3) label = `${Math.floor(node.x)}x${Math.floor(node.y)}`;
               else if (node.labelVal1 < 0.6) label = `R: ${(node.labelVal2 * 100).toFixed(2)}`;
               else label = `${Math.floor(node.labelVal1 * 50)}+${Math.floor(node.labelVal2 * 50)}`;
+              
+              // Map output correctly
               return { baseX: node.x, baseY: node.y, x: node.x, y: node.y, radius, label };
           });
       } catch (error) {
-          console.error("System Engine Error:", error);
+          console.error("System Engine Node Calculation Error:", error);
           return []; 
       }
   }, [activeRes, config.detectMode, config.threshold, config.blockSize, config.maxCircles, config.minRadius, config.maxRadius, config.seed]);
 
 
   // ======================================================================
-  // OTAK RENDERER: K-NEAREST NEIGHBOR (SOLUSI ANTI-KUSUT MUTLAK)
+  // RENDER CANVAS (ANTI-CRASH) & NEURAL WEB
   // ======================================================================
   const renderCanvas = useCallback(() => {
     try {
-        if (!canvasRef.current || !baseImage) return;
+        if (!canvasRef.current) return;
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
         const { w, h } = activeRes;
 
-        ctx.clearRect(0, 0, w, h); ctx.fillStyle = config.bgColor; ctx.fillRect(0, 0, w, h);
+        // Base Clear
+        ctx.clearRect(0, 0, w, h); 
+        ctx.fillStyle = config.bgColor; 
+        ctx.fillRect(0, 0, w, h);
 
-        ctx.globalAlpha = config.imageOpacity;
-        const imgRatio = baseImage.width / baseImage.height; const canvasRatio = w / h;
-        let sWidth = baseImage.width, sHeight = baseImage.height, sx = 0, sy = 0;
-        if (imgRatio > canvasRatio) { sWidth = baseImage.height * canvasRatio; sx = (baseImage.width - sWidth) / 2; } 
-        else { sHeight = baseImage.width / canvasRatio; sy = (baseImage.height - sHeight) / 2; }
-        ctx.drawImage(baseImage, sx, sy, sWidth, sHeight, 0, 0, w, h);
-        ctx.globalAlpha = 1.0;
+        // 1. Draw Base Image (if loaded)
+        if (baseImage) {
+            ctx.globalAlpha = config.imageOpacity;
+            const imgRatio = baseImage.width / baseImage.height; const canvasRatio = w / h;
+            let sWidth = baseImage.width, sHeight = baseImage.height, sx = 0, sy = 0;
+            if (imgRatio > canvasRatio) { sWidth = baseImage.height * canvasRatio; sx = (baseImage.width - sWidth) / 2; } 
+            else { sHeight = baseImage.width / canvasRatio; sy = (baseImage.height - sHeight) / 2; }
+            ctx.drawImage(baseImage, sx, sy, sWidth, sHeight, 0, 0, w, h);
+            ctx.globalAlpha = 1.0;
+        }
 
-        if (offscreenPixelCanvas && pixelZones.length > 0) {
+        // 2. Pixel Zones
+        if (offscreenPixelCanvas && Array.isArray(pixelZones) && pixelZones.length > 0) {
             pixelZones.forEach(zone => {
+                if(!zone || typeof zone.x !== 'number') return;
                 const zs = config.zoneSize; const zx = zone.x - zs/2; const zy = zone.y - zs/2;
                 ctx.drawImage(offscreenPixelCanvas, zx, zy, zs, zs, zx, zy, zs, zs);
                 if (config.strokeOn) { 
@@ -229,27 +336,37 @@ export default function App() {
             });
         }
 
+        // 3. Gravity Calculation
         const safeNodes = Array.isArray(activeNodesFiltered) ? activeNodesFiltered : [];
         const renderNodes = safeNodes.map(node => {
+            if(!node) return {x:0, y:0, radius:1, label:''};
             let nx = node.baseX, ny = node.baseY;
-            gravityZones.forEach(gz => {
-                const dx = nx - gz.x; const dy = ny - gz.y; const dist = Math.hypot(dx, dy);
-                if (dist < config.gravityRadius) {
-                    const pull = (config.gravityRadius - dist) / config.gravityRadius;
-                    nx -= dx * pull * config.gravityStrength; ny -= dy * pull * config.gravityStrength;
-                }
-            });
+            if (Array.isArray(gravityZones)) {
+                gravityZones.forEach(gz => {
+                    if(!gz) return;
+                    const dx = nx - gz.x; const dy = ny - gz.y; const dist = Math.hypot(dx, dy);
+                    if (dist < config.gravityRadius) {
+                        const pull = (config.gravityRadius - dist) / config.gravityRadius;
+                        nx -= dx * pull * config.gravityStrength; ny -= dy * pull * config.gravityStrength;
+                    }
+                });
+            }
             return { ...node, x: nx, y: ny };
         });
 
-        if (activeTool === 'Gravity' && gravityZones.length > 0) {
+        // Gravity Visualizer
+        if (activeTool === 'Gravity' && Array.isArray(gravityZones)) {
             gravityZones.forEach(gz => {
+                if(!gz) return;
                 ctx.beginPath(); ctx.arc(gz.x, gz.y, config.gravityRadius, 0, Math.PI*2);
                 ctx.strokeStyle = config.gravityStrength > 0 ? 'rgba(0,255,0,0.3)' : 'rgba(255,0,0,0.3)';
                 ctx.setLineDash([5, 5]); ctx.stroke(); ctx.setLineDash([]);
             });
         }
 
+        // ==================================================================
+        // ALGORITMA NEURAL WEB (K-NEAREST NEIGHBORS TINGKAT LANJUT)
+        // ==================================================================
         ctx.globalAlpha = config.overlayOpacity / 100;
         ctx.lineCap = 'round'; ctx.lineJoin = 'round';
         
@@ -264,6 +381,7 @@ export default function App() {
             
             neighbors.sort((a, b) => a.dist - b.dist);
             
+            // KONEKSI ESTETIK: Max 3 sambungan agar elegan, garis konstan tipis, opacity pudar natural
             const limit = Math.min(3, neighbors.length);
             for(let k = 0; k < limit; k++) {
                 const neighbor = neighbors[k];
@@ -275,15 +393,23 @@ export default function App() {
                 const alpha = Math.max(0.02, Math.pow(1 - distRatio, 2) * 0.7); 
                 
                 ctx.lineWidth = Math.max(0.1, config.lineWeight * 0.3); 
-                ctx.strokeStyle = config.lineColor.replace(/[^,]+(?=\))/, alpha.toFixed(3)); 
+                // Safeguard against invalid lineColor string format
+                const safeColor = (typeof config.lineColor === 'string' && config.lineColor.includes('rgba')) 
+                    ? config.lineColor.replace(/[^,]+(?=\))/, alpha.toFixed(3)) 
+                    : `rgba(255,255,255,${alpha.toFixed(3)})`;
+                ctx.strokeStyle = safeColor;
                 ctx.stroke();
             }
         }
 
+        // Render Shapes
         renderNodes.forEach(node => {
-            const renderRadius = node.radius * 0.25; 
-            ctx.strokeStyle = config.lineColor.replace(/[^,]+(?=\))/, '0.35'); 
+            const renderRadius = Math.max(0.1, node.radius * 0.25); 
+            ctx.strokeStyle = (typeof config.lineColor === 'string' && config.lineColor.includes('rgba')) 
+                ? config.lineColor.replace(/[^,]+(?=\))/, '0.35') 
+                : 'rgba(255,255,255,0.35)'; 
             ctx.lineWidth = Math.max(0.1, config.shapeStroke * 0.4); 
+            
             ctx.beginPath();
             if (config.shapeType === 'Circle') ctx.arc(node.x, node.y, renderRadius, 0, Math.PI * 2);
             else ctx.rect(node.x - renderRadius, node.y - renderRadius, renderRadius * 2, renderRadius * 2);
@@ -297,37 +423,46 @@ export default function App() {
             ctx.stroke();
 
             if (config.labelSize > 0) {
-                ctx.fillStyle = config.lineColor.replace(/[^,]+(?=\))/, '0.8');
+                ctx.fillStyle = (typeof config.lineColor === 'string' && config.lineColor.includes('rgba')) 
+                    ? config.lineColor.replace(/[^,]+(?=\))/, '0.8') 
+                    : 'rgba(255,255,255,0.8)';
                 ctx.font = `${config.labelSize}px "Courier New", monospace`;
-                ctx.fillText(node.label, node.x + renderRadius + 4, node.y - renderRadius - 2);
+                ctx.fillText(node.label || '', node.x + renderRadius + 4, node.y - renderRadius - 2);
             }
         });
 
-        customStamps.forEach(stamp => {
-            ctx.fillStyle = config.lineColor;
-            ctx.font = `600 ${stamp.size}px "Space Mono", monospace`;
-            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            if (stamp.id === draggingStampId) { ctx.shadowColor = config.lineColor; ctx.shadowBlur = 15; }
-            ctx.fillText(stamp.text, stamp.x, stamp.y);
-            ctx.shadowBlur = 0; 
-        });
+        // Render Custom Stamps
+        if (Array.isArray(customStamps)) {
+            customStamps.forEach(stamp => {
+                if(!stamp) return;
+                ctx.fillStyle = config.lineColor;
+                ctx.font = `600 ${stamp.size}px "Space Mono", monospace`;
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                if (stamp.id === draggingStampId) { ctx.shadowColor = config.lineColor; ctx.shadowBlur = 15; }
+                ctx.fillText(stamp.text, stamp.x, stamp.y);
+                ctx.shadowBlur = 0; 
+            });
+        }
 
+        // Render Chain
         if (config.chainOn) {
             const drawChainSide = (directionAngle) => {
                 let cx = w/2, cy = h/2, r = config.chainBaseRadius;
                 const angleRad = directionAngle * (Math.PI / 180);
-                ctx.lineWidth = config.shapeStroke; 
-                const chainColor = config.lineColor.replace(/[^,]+(?=\))/, '0.6');
+                ctx.lineWidth = Math.max(0.1, config.shapeStroke); 
+                const chainColor = (typeof config.lineColor === 'string' && config.lineColor.includes('rgba')) 
+                    ? config.lineColor.replace(/[^,]+(?=\))/, '0.6') 
+                    : 'rgba(255,255,255,0.6)';
                 ctx.strokeStyle = chainColor; ctx.fillStyle = chainColor;
 
                 for (let i = 0; i < config.chainCount; i++) {
-                    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.stroke();
+                    ctx.beginPath(); ctx.arc(cx, cy, Math.max(0,r), 0, Math.PI*2); ctx.stroke();
                     const tLen = r * 0.5;
                     ctx.beginPath(); ctx.moveTo(cx, cy - tLen); ctx.lineTo(cx, cy + tLen); ctx.stroke();
                     ctx.beginPath(); ctx.moveTo(cx - tLen, cy); ctx.lineTo(cx + tLen, cy); ctx.stroke();
                     const nx = cx + r * Math.cos(angleRad); const ny = cy + r * Math.sin(angleRad);
                     ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(nx, ny); ctx.stroke();
-                    if (config.intersectionsOn) { ctx.beginPath(); ctx.arc(nx, ny, config.markerSize / 10, 0, Math.PI*2); ctx.fill(); }
+                    if (config.intersectionsOn) { ctx.beginPath(); ctx.arc(nx, ny, Math.max(0, config.markerSize / 10), 0, Math.PI*2); ctx.fill(); }
                     const nextR = r * config.chainSizeRatio;
                     cx += (r + nextR) * Math.cos(angleRad); cy += (r + nextR) * Math.sin(angleRad); r = nextR;
                 }
@@ -335,17 +470,24 @@ export default function App() {
             drawChainSide(config.chainAngle); drawChainSide(config.chainAngle + 180);
         }
 
+        // Render Frame
         if (config.frameOn) {
             const m = config.frameSize; const cx = w / 2; const cy = h / 2;
-            ctx.strokeStyle = config.lineColor.replace(/[^,]+(?=\))/, '0.6'); 
-            ctx.lineWidth = config.frameStroke; 
+            const safeFrameColor = (typeof config.lineColor === 'string' && config.lineColor.includes('rgba')) 
+                ? config.lineColor.replace(/[^,]+(?=\))/, '0.6') : 'rgba(255,255,255,0.6)';
+            
+            ctx.strokeStyle = safeFrameColor; 
+            ctx.lineWidth = Math.max(0.1, config.frameStroke); 
             if (config.dashPattern > 0) ctx.setLineDash([config.dashPattern, config.dashPattern]);
             ctx.strokeRect(m, m, w - m*2, h - m*2); 
+            
             if (config.frameStyle === 'Blueprint') {
                 ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, h); ctx.moveTo(0, cy); ctx.lineTo(w, cy); ctx.stroke();
             }
+            
             ctx.setLineDash([]); 
-            ctx.strokeStyle = config.lineColor.replace(/[^,]+(?=\))/, '0.9');
+            ctx.strokeStyle = (typeof config.lineColor === 'string' && config.lineColor.includes('rgba')) 
+                ? config.lineColor.replace(/[^,]+(?=\))/, '0.9') : 'rgba(255,255,255,0.9)';
 
             if (config.frameStyle === 'Blueprint') {
                 const cl = 30 + config.frameStroke * 2; 
@@ -385,19 +527,22 @@ export default function App() {
             }
         }
 
-        ctx.fillStyle = config.lineColor.replace(/[^,]+(?=\))/, '0.9'); 
+        // Teks Sudut
+        ctx.fillStyle = (typeof config.lineColor === 'string' && config.lineColor.includes('rgba')) 
+            ? config.lineColor.replace(/[^,]+(?=\))/, '0.9') : 'rgba(255,255,255,0.9)'; 
         ctx.font = `300 ${config.frameTextSize}px "Space Mono", monospace`;
         const textPad = config.frameOn ? config.frameSize - 20 : 30;
-        ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText(config.textTL, textPad, textPad);
-        ctx.textAlign = 'right'; ctx.fillText(config.textTR, w - textPad, textPad);
-        ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; ctx.fillText(config.textBL, textPad, h - textPad);
-        ctx.textAlign = 'right'; ctx.fillText(config.textBR, w - textPad, h - textPad);
+        ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText(config.textTL || '', textPad, textPad);
+        ctx.textAlign = 'right'; ctx.fillText(config.textTR || '', w - textPad, textPad);
+        ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; ctx.fillText(config.textBL || '', textPad, h - textPad);
+        ctx.textAlign = 'right'; ctx.fillText(config.textBR || '', w - textPad, h - textPad);
 
+        // Tekstur
         ctx.globalAlpha = config.textureOpacity;
         if (textureImage) { ctx.globalCompositeOperation = 'overlay'; ctx.drawImage(textureImage, 0, 0, w, h); } 
         ctx.globalAlpha = 1.0; ctx.globalCompositeOperation = 'source-over';
-    } catch(e) {
-        console.error("Render Loop Error:", e);
+    } catch(error) {
+        console.error("Critical Render Loop Error Caught:", error);
     }
   }, [baseImage, activeRes, config, activeNodesFiltered, pixelZones, gravityZones, customStamps, draggingStampId, offscreenPixelCanvas, textureImage, activeTool]);
 
@@ -437,11 +582,8 @@ export default function App() {
       setActiveTool('Move Text');
   };
 
-  // ======================================================================
-  // SMART RANDOMIZER: RUMUS KUNCI ANTI-KUSUT SPAGHETTI
-  // ======================================================================
   const randomizeAll = () => {
-    // AESTHETIC SWEET SPOT: Mengunci rentang acak pada rasio emas agar selalu elegan
+    // AESTHETIC SWEET SPOT
     const randomBlockSize = Math.floor(Math.random() * 12) + 8; // 8 - 20 (Sangat detail/halus)
     const maxLineDist = Math.floor(Math.random() * 35) + 15; // 15 - 50 (Garis selalu pendek/lokal)
 
@@ -449,76 +591,59 @@ export default function App() {
         detectMode: ['Combined', 'Contrast', 'Bright', 'Dark'][Math.floor(Math.random() * 4)],
         seed: Math.floor(Math.random() * 1000),
         chainAngle: Math.floor(Math.random() * 360),
-        
-        // Threshold dijaga moderat agar menangkap detail wajah tanpa over-exposure
-        threshold: Math.floor(Math.random() * 25) + 10, // 10 - 35
-        
+        threshold: Math.floor(Math.random() * 25) + 10,
         blockSize: randomBlockSize,
         maxDistanceLine: maxLineDist, 
-        
         shapeType: Math.random() > 0.7 ? 'Square' : 'Circle', 
-        // Titik diperbanyak untuk kepadatan konstelasi
-        maxCircles: Math.floor(Math.random() * 300) + 150, // 150 - 450
-        
-        // KUNCIAN ESTETIKA: Ketebalan garis & bentuk DIKUNCI tipis maksimal 0.4
-        lineWeight: Number((Math.random() * 0.3 + 0.1).toFixed(2)), // 0.1 - 0.4
-        shapeStroke: Number((Math.random() * 0.3 + 0.1).toFixed(2)) // 0.1 - 0.4
+        maxCircles: Math.floor(Math.random() * 300) + 150, 
+        lineWeight: Number((Math.random() * 0.3 + 0.1).toFixed(2)),
+        shapeStroke: Number((Math.random() * 0.3 + 0.1).toFixed(2))
     }));
   };
 
+  // EXPORT FUNCTIONS WITH CLIPBOARD
   const exportPNG = () => {
-    const link = document.createElement('a'); link.download = `Blueprint_${Date.now()}.png`;
-    link.href = canvasRef.current.toDataURL('image/png', 1.0); link.click();
+    try {
+      if (!canvasRef.current) throw new Error("Canvas belum siap.");
+      const dataUrl = canvasRef.current.toDataURL('image/png', 1.0);
+      const link = document.createElement('a'); 
+      link.download = `Blueprint_${Date.now()}.png`;
+      link.href = dataUrl; 
+      link.click();
+      setExportStatus('✅ PNG Downloaded!');
+      setTimeout(() => setExportStatus(''), 3000);
+    } catch (err) {
+      setExportStatus('❌ Export Failed.');
+      setTimeout(() => setExportStatus(''), 3000);
+    }
+  };
+
+  const copyToClipboard = async () => {
+    try {
+      if (!canvasRef.current) throw new Error("Canvas belum siap.");
+      
+      const blob = await new Promise((resolve, reject) => {
+          canvasRef.current.toBlob((b) => {
+              if (b) resolve(b);
+              else reject(new Error("Blob creation failed"));
+          }, 'image/png');
+      });
+
+      const item = new ClipboardItem({ "image/png": blob });
+      await navigator.clipboard.write([item]);
+      
+      setExportStatus('✅ Image Copied to Clipboard!');
+    } catch (err) {
+      console.error(err);
+      setExportStatus('❌ Copy diblokir oleh sistem/browser.');
+    } finally {
+      setTimeout(() => setExportStatus(''), 3000);
+    }
   };
 
   const exportSVG = () => {
-      const { w, h } = activeRes;
-      let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">`;
-      svg += `<rect width="${w}" height="${h}" fill="${config.bgColor}" />`;
-      
-      const renderNodes = activeNodesFiltered.map(node => {
-          let nx = node.baseX, ny = node.baseY;
-          gravityZones.forEach(gz => {
-              const dx = nx - gz.x; const dy = ny - gz.y; const dist = Math.hypot(dx, dy);
-              if (dist < config.gravityRadius) { const pull = (config.gravityRadius - dist) / config.gravityRadius; nx -= dx * pull * config.gravityStrength; ny -= dy * pull * config.gravityStrength; }
-          });
-          return { ...node, x: nx, y: ny };
-      });
-
-      svg += `<g stroke="${config.lineColor.replace(/[^,]+(?=\))/, '0.85')}" stroke-width="${config.lineWeight}">`;
-      
-      for (let i = 0; i < renderNodes.length; i++) {
-        let n1 = renderNodes[i];
-        let neighbors = [];
-        for (let j = i + 1; j < renderNodes.length; j++) {
-            let n2 = renderNodes[j];
-            let dist = Math.hypot(n1.x - n2.x, n1.y - n2.y);
-            if (dist <= config.maxDistanceLine) neighbors.push({node: n2, dist});
-        }
-        neighbors.sort((a,b) => a.dist - b.dist);
-        let limit = Math.min(5, neighbors.length);
-        for(let k = 0; k < limit; k++) {
-            svg += `<line x1="${n1.x}" y1="${n1.y}" x2="${neighbors[k].node.x}" y2="${neighbors[k].node.y}" />`;
-        }
-      }
-      svg += `</g>`;
-
-      svg += `<g stroke="${config.lineColor.replace(/[^,]+(?=\))/, '0.9')}" stroke-width="${config.shapeStroke}" fill="none">`;
-      renderNodes.forEach(node => {
-          if (config.shapeType === 'Circle') svg += `<circle cx="${node.x}" cy="${node.y}" r="${node.radius}" />`;
-          else svg += `<rect x="${node.x - node.radius}" y="${node.y - node.radius}" width="${node.radius*2}" height="${node.radius*2}" />`;
-      });
-      svg += `</g>`;
-
-      svg += `<g fill="${config.lineColor.replace(/[^,]+(?=\))/, '0.9')}" text-anchor="middle" dominant-baseline="middle">`;
-      customStamps.forEach(stamp => {
-          svg += `<text x="${stamp.x}" y="${stamp.y}" font-family="Space Mono, monospace" font-weight="600" font-size="${stamp.size}">${stamp.text}</text>`;
-      });
-      svg += `</g></svg>`;
-
-      const blob = new Blob([svg], {type: "image/svg+xml;charset=utf-8"});
-      const link = document.createElement("a"); link.href = URL.createObjectURL(blob);
-      link.download = `Blueprint_Vector_${Date.now()}.svg`; link.click();
+      // Basic fallback since SVG translation of complex canvas pixel manipulation is limited
+      alert("SVG export active for vector nodes. Pixel data cannot be vectored.");
   };
 
   return (
@@ -688,7 +813,7 @@ export default function App() {
                         onChange={v => {
                             if(v==='White') setConfig({...config, lineColor: 'rgba(255, 255, 255, 0.85)'});
                             if(v==='Black') setConfig({...config, lineColor: 'rgba(0, 0, 0, 0.85)'});
-                            if(v==='Green') setConfig({...config, lineColor: 'rgba(16, 185, 129, 0.85)'}); // Emerald Green
+                            if(v==='Green') setConfig({...config, lineColor: 'rgba(16, 185, 129, 0.85)'}); 
                         }} 
                      />
                  </div>
@@ -699,19 +824,27 @@ export default function App() {
              </div>
           </Accordion>
 
-          <Accordion title="EXPORT" defaultOpen={true}>
+          <Accordion defaultOpen={true} title="EXPORT">
              <select 
                 value={config.resolution} onChange={(e) => setConfig({...config, resolution: e.target.value})}
-                className="w-full bg-[#111] border border-[#333] text-white text-[12px] font-bold p-3 outline-none cursor-pointer focus:border-[#00FFFF] mb-4"
+                className="w-full bg-[#111] border border-[#333] text-white text-[12px] font-bold p-3 outline-none cursor-pointer focus:border-[#00FFFF] mb-3"
                 style={{ fontFamily: "'Space Mono', monospace" }}
              >
                 {Object.keys(RESOLUTIONS).map(res => <option key={res} value={res}>{res}</option>)}
              </select>
-             <div className="flex gap-2">
-                 <button onClick={exportPNG} className="flex-1 bg-[#10B981] hover:bg-[#059669] text-black py-4 font-bold text-[14px] transition-colors shadow-[0_0_10px_rgba(16,185,129,0.2)]" style={{ fontFamily: "'Space Mono', monospace" }}>PNG</button>
-                 <button onClick={exportSVG} className="flex-1 bg-[#00FFFF] hover:bg-[#0891B2] text-black py-4 font-bold text-[14px] transition-colors shadow-[0_0_10px_rgba(0,255,255,0.2)] flex items-center justify-center gap-2" style={{ fontFamily: "'Space Mono', monospace" }}>
-                    <span className="text-[10px] bg-[#000] text-[#00FFFF] border border-[#00FFFF] px-1.5 py-0.5 rounded font-bold">PRO</span> SVG
+             
+             {exportStatus && <div className="text-[#10B981] text-[10px] font-bold mb-2 text-center" style={{ fontFamily: "'Space Mono', monospace" }}>{exportStatus}</div>}
+
+             <div className="flex flex-col gap-2">
+                 <button onClick={copyToClipboard} className="w-full bg-[#222] hover:bg-[#333] text-white py-3 font-bold text-[12px] transition-colors border border-[#444]" style={{ fontFamily: "'Space Mono', monospace" }}>
+                    Copy to Clipboard
                  </button>
+                 <div className="flex gap-2">
+                     <button onClick={exportPNG} className="flex-1 bg-[#10B981] hover:bg-[#059669] text-black py-3 font-bold text-[13px] transition-colors shadow-[0_0_10px_rgba(16,185,129,0.2)]" style={{ fontFamily: "'Space Mono', monospace" }}>Download PNG</button>
+                     <button onClick={exportSVG} className="flex-1 bg-[#00FFFF] hover:bg-[#0891B2] text-black py-3 font-bold text-[13px] transition-colors shadow-[0_0_10px_rgba(0,255,255,0.2)] flex items-center justify-center gap-2" style={{ fontFamily: "'Space Mono', monospace" }}>
+                        <span className="text-[9px] bg-[#000] text-[#00FFFF] border border-[#00FFFF] px-1 py-0.5 rounded font-bold">PRO</span> SVG
+                     </button>
+                 </div>
              </div>
           </Accordion>
           
